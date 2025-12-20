@@ -43,3 +43,33 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# --- Secrets / Signing (Google Play, Firebase, etc.) ---
+# Android signing configs
+/android/key.properties
+
+# Keystores / certificates (never commit)
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pem
+**/*.der
+**/*.crt
+**/*.cer
+
+# Google Play Developer API / service account credentials (json)
+**/service-account*.json
+**/serviceAccount*.json
+**/google-play*.json
+**/googleplay*.json
+**/play-*.json
+
+# Firebase config files (contain API keys; many teams choose to commit, but ignore if you treat them as secrets)
+/android/app/google-services.json
+/ios/Runner/GoogleService-Info.plist
+
+# Common environment/secret files
+.env
+.env.*
+!.env.example
+!.env.sample

@@ -59,8 +59,8 @@ class _PerfilScreenState extends State<PerfilScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F6E58),
       bottomNavigationBar: CustomNavBar(
-        tipoUsuario: _userData?['tipo'] ?? 'outros',
-        selectedIndex: 1,
+        tipoUsuario: (_userData?['tipo'] ?? '').toString(),
+        selected: NavDestination.profile,
       ),
       body: SafeArea(
         child: Stack(

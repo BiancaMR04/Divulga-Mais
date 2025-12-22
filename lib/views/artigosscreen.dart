@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:diacritic/diacritic.dart';
 import 'package:divulgapampa/widgets/custom_navbar.dart';
 import 'package:divulgapampa/views/postscreen.dart';
+import 'package:divulgapampa/services/analytics_service.dart';
 
 String normalizeText(String text) {
   return removeDiacritics(text)
@@ -32,6 +32,17 @@ class _ArtigosScreenState extends State<ArtigosScreen> {
   String _termoPesquisa = '';
   int? _anoInicial;
   int? _anoFinal;
+  final List<MapEntry<String, String>> _clientSideFilters = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final filtros = widget.filtros;
+    if (filtros != null && filtros.isNotEmpty) {
+      // Fire-and-forget: analytics agregados e sem PII.
+      AnalyticsService().trackFiltersUsed(filtros);
+    }
+  }
 
   Query _artigosQuery() {
     Query q = FirebaseFirestore.instance
@@ -39,12 +50,19 @@ class _ArtigosScreenState extends State<ArtigosScreen> {
         .where('ativo', isEqualTo: true)
         .orderBy('dataPublicacao', descending: true);
 
+    _clientSideFilters.clear();
     if (widget.filtros != null && widget.filtros!.isNotEmpty) {
+      String? arrayCampoAplicado;
+
       widget.filtros!.forEach((campo, valor) {
-        final useArrayContains =
-            campo == 'linhasPesquisaIds' || campo.endsWith('Ids');
+        final useArrayContains = campo == 'linhasPesquisaIds' || campo.endsWith('Ids');
         if (useArrayContains) {
-          q = q.where(campo, arrayContains: valor);
+          if (arrayCampoAplicado == null) {
+            arrayCampoAplicado = campo;
+            q = q.where(campo, arrayContains: valor);
+          } else {
+            _clientSideFilters.add(MapEntry(campo, valor));
+          }
         } else {
           q = q.where(campo, isEqualTo: valor);
         }
@@ -66,6 +84,23 @@ class _ArtigosScreenState extends State<ArtigosScreen> {
     }
 
     return q;
+  }
+
+  bool _matchesClientSideFilters(Map<String, dynamic> data) {
+    if (_clientSideFilters.isEmpty) return true;
+    for (final f in _clientSideFilters) {
+      final campo = f.key;
+      final valor = f.value;
+      final isArray = campo == 'linhasPesquisaIds' || campo.endsWith('Ids');
+      final v = data[campo];
+      if (isArray) {
+        final list = (v as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+        if (!list.contains(valor)) return false;
+      } else {
+        if ((v ?? '').toString() != valor) return false;
+      }
+    }
+    return true;
   }
 
   bool _matchesSearch(Map<String, dynamic> data, String termoLower) {
@@ -206,7 +241,7 @@ class _ArtigosScreenState extends State<ArtigosScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F6E58),
-      bottomNavigationBar: const CustomNavBar(),
+      bottomNavigationBar: CustomNavBar(),
       body: SafeArea(
         child: Stack(
           children: [
@@ -234,7 +269,8 @@ class _ArtigosScreenState extends State<ArtigosScreen> {
                     final termoLower = _termoPesquisa.toLowerCase().trim();
                     final filtered = docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      return _matchesSearch(data, termoLower);
+                      return _matchesClientSideFilters(data) &&
+                          _matchesSearch(data, termoLower);
                     }).toList();
 
                     if (filtered.isEmpty) {
@@ -246,47 +282,58 @@ class _ArtigosScreenState extends State<ArtigosScreen> {
                       padding: const EdgeInsets.all(16),
                       itemCount: filtered.length,
                       itemBuilder: (context, i) {
+                        final doc = filtered[i];
                         final data =
-                            filtered[i].data() as Map<String, dynamic>;
+                            doc.data() as Map<String, dynamic>;
                         final dataPub =
                             (data['dataPublicacao'] as Timestamp?)?.toDate();
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2))
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(data['titulo'] ?? '',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16)),
-                              const SizedBox(height: 6),
-                              Text(data['autor'] ?? '',
-                                  style: const TextStyle(
-                                      fontSize: 13, color: Colors.grey)),
-                              const SizedBox(height: 8),
-                              Text(data['resumo'] ?? '',
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 14)),
-                              if (dataPub != null)
-                                Text(
-                                  "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
-                                  style: const TextStyle(
-                                      fontSize: 12, color: Colors.grey),
-                                ),
-                            ],
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ArtigoDetalheScreen(artigoId: doc.id),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2))
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(data['titulo'] ?? '',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                const SizedBox(height: 6),
+                                Text(data['autor'] ?? '',
+                                    style: const TextStyle(
+                                        fontSize: 13, color: Colors.grey)),
+                                const SizedBox(height: 8),
+                                Text(data['resumo'] ?? '',
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 14)),
+                                if (dataPub != null)
+                                  Text(
+                                    "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
+                                    style: const TextStyle(
+                                        fontSize: 12, color: Colors.grey),
+                                  ),
+                              ],
+                            ),
                           ),
                         );
                       },

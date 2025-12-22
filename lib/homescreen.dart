@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:divulgapampa/views/artigosscreen.dart';
+import 'package:divulgapampa/views/contatosscreen.dart';
+import 'package:divulgapampa/views/postscreen.dart';
+import 'package:divulgapampa/views/quemsomosscreen.dart';
+import 'package:divulgapampa/views/textoscreen.dart';
 import 'package:divulgapampa/widgets/custom_navbar.dart';
 import 'package:divulgapampa/widgets/menu_sub_screen.dart';
 import 'package:flutter/material.dart';
@@ -41,8 +45,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _carregarTipoUsuario() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final doc =
-        await FirebaseFirestore.instance.collection('usuarios').doc(user.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(user.uid)
+        .get();
     setState(() => _tipoUsuario = doc.data()?['tipo'] ?? 'comum');
   }
 
@@ -55,19 +61,29 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_ultimoAno) {
       final agora = DateTime.now();
       final inicio = DateTime(agora.year - 1, agora.month, agora.day);
-      q = q.where('dataPublicacao',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(inicio));
+      q = q.where(
+        'dataPublicacao',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(inicio),
+      );
     } else if (_anoInicial != null && _anoFinal == null) {
-      q = q.where('dataPublicacao',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(_anoInicial!)));
+      q = q.where(
+        'dataPublicacao',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(_anoInicial!)),
+      );
     } else if (_anoFinal != null && _anoInicial == null) {
-      q = q.where('dataPublicacao',
-          isLessThanOrEqualTo: Timestamp.fromDate(DateTime(_anoFinal! + 1)));
+      q = q.where(
+        'dataPublicacao',
+        isLessThanOrEqualTo: Timestamp.fromDate(DateTime(_anoFinal! + 1)),
+      );
     } else if (_anoInicial != null && _anoFinal != null) {
-      q = q.where('dataPublicacao',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(_anoInicial!)));
-      q = q.where('dataPublicacao',
-          isLessThanOrEqualTo: Timestamp.fromDate(DateTime(_anoFinal! + 1)));
+      q = q.where(
+        'dataPublicacao',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime(_anoInicial!)),
+      );
+      q = q.where(
+        'dataPublicacao',
+        isLessThanOrEqualTo: Timestamp.fromDate(DateTime(_anoFinal! + 1)),
+      );
     }
 
     return q;
@@ -132,113 +148,119 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
-        return StatefulBuilder(builder: (context, setModalState) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("Filtrar por ano de publicação",
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Filtrar por ano de publicação",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
 
-                CheckboxListTile(
-                  title: const Text("Mostrar apenas artigos do último ano"),
-                  value: tempUltimoAno,
-                  onChanged: (val) {
-                    setModalState(() => tempUltimoAno = val ?? false);
-                    if (val == true) {
-                      tempInicial = null;
-                      tempFinal = null;
-                    }
-                  },
-                ),
+                  CheckboxListTile(
+                    title: const Text("Mostrar apenas artigos do último ano"),
+                    value: tempUltimoAno,
+                    onChanged: (val) {
+                      setModalState(() => tempUltimoAno = val ?? false);
+                      if (val == true) {
+                        tempInicial = null;
+                        tempFinal = null;
+                      }
+                    },
+                  ),
 
-                if (!tempUltimoAno) ...[
+                  if (!tempUltimoAno) ...[
+                    Row(
+                      children: [
+                        const Text("De: "),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButton<int>(
+                            value: tempInicial,
+                            hint: const Text("Ano inicial"),
+                            isExpanded: true,
+                            items: List.generate(10, (i) {
+                              final ano = anoAtual - i;
+                              return DropdownMenuItem(
+                                value: ano,
+                                child: Text(ano.toString()),
+                              );
+                            }),
+                            onChanged: (val) =>
+                                setModalState(() => tempInicial = val),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        const Text("Até: "),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButton<int>(
+                            value: tempFinal,
+                            hint: const Text("Ano final"),
+                            isExpanded: true,
+                            items: List.generate(10, (i) {
+                              final ano = anoAtual - i;
+                              return DropdownMenuItem(
+                                value: ano,
+                                child: Text(ano.toString()),
+                              );
+                            }),
+                            onChanged: (val) =>
+                                setModalState(() => tempFinal = val),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
                   Row(
                     children: [
-                      const Text("De: "),
-                      const SizedBox(width: 10),
                       Expanded(
-                        child: DropdownButton<int>(
-                          value: tempInicial,
-                          hint: const Text("Ano inicial"),
-                          isExpanded: true,
-                          items: List.generate(10, (i) {
-                            final ano = anoAtual - i;
-                            return DropdownMenuItem(
-                              value: ano,
-                              child: Text(ano.toString()),
-                            );
-                          }),
-                          onChanged: (val) =>
-                              setModalState(() => tempInicial = val),
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0F6E58),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _anoInicial = tempInicial;
+                              _anoFinal = tempFinal;
+                              _ultimoAno = tempUltimoAno;
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: const Text(
+                            "Aplicar",
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const Text("Até: "),
                       const SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButton<int>(
-                          value: tempFinal,
-                          hint: const Text("Ano final"),
-                          isExpanded: true,
-                          items: List.generate(10, (i) {
-                            final ano = anoAtual - i;
-                            return DropdownMenuItem(
-                              value: ano,
-                              child: Text(ano.toString()),
-                            );
-                          }),
-                          onChanged: (val) =>
-                              setModalState(() => tempFinal = val),
-                        ),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _anoInicial = null;
+                            _anoFinal = null;
+                            _ultimoAno = false;
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: const Text("Limpar"),
                       ),
                     ],
                   ),
                 ],
-
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F6E58)),
-                        onPressed: () {
-                          setState(() {
-                            _anoInicial = tempInicial;
-                            _anoFinal = tempFinal;
-                            _ultimoAno = tempUltimoAno;
-                          });
-                          Navigator.pop(context);
-                        },
-                        child: const Text("Aplicar",
-                            style: TextStyle(color: Colors.white)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _anoInicial = null;
-                          _anoFinal = null;
-                          _ultimoAno = false;
-                        });
-                        Navigator.pop(context);
-                      },
-                      child: const Text("Limpar"),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        });
+              ),
+            );
+          },
+        );
       },
     );
   }
@@ -247,16 +269,23 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     const double topOffset = 160;
     final filtroAtivo =
-        _termoPesquisa.isNotEmpty || _anoInicial != null || _anoFinal != null || _ultimoAno;
+        _termoPesquisa.isNotEmpty ||
+        _anoInicial != null ||
+        _anoFinal != null ||
+        _ultimoAno;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F6E58),
-      bottomNavigationBar: CustomNavBar(tipoUsuario: _tipoUsuario ?? 'comum'),
+      bottomNavigationBar: CustomNavBar(
+        tipoUsuario: _tipoUsuario ?? '',
+        selected: NavDestination.home,
+      ),
       body: SafeArea(
         child: Stack(
           children: [
             Positioned.fill(
-                child: Image.asset('assets/home.png', fit: BoxFit.cover)),
+              child: Image.asset('assets/home.png', fit: BoxFit.cover),
+            ),
 
             // Conteúdo
             Positioned.fill(
@@ -273,11 +302,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) {
                             return const Center(
-                                child: CircularProgressIndicator());
+                              child: CircularProgressIndicator(),
+                            );
                           }
 
                           final allDocs = snapshot.data!.docs;
-                          final termoLower = _termoPesquisa.toLowerCase().trim();
+                          final termoLower = _termoPesquisa
+                              .toLowerCase()
+                              .trim();
 
                           final filteredDocs = allDocs.where((doc) {
                             final data = doc.data() as Map<String, dynamic>;
@@ -286,15 +318,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
                           if (filteredDocs.isEmpty) {
                             return const Center(
-                                child: Text("Nenhum artigo encontrado."));
+                              child: Text("Nenhum artigo encontrado."),
+                            );
                           }
 
                           return ListView.builder(
                             padding: const EdgeInsets.all(16),
                             itemCount: filteredDocs.length,
                             itemBuilder: (context, i) {
-                              final data =
-                                  filteredDocs[i].data() as Map<String, dynamic>;
+                              final doc = filteredDocs[i];
+                              final data = doc.data() as Map<String, dynamic>;
                               final titulo = data['titulo'] ?? '';
                               final autor = data['autor'] ?? '';
                               final ppg = data['ppgId'] ?? '';
@@ -302,48 +335,72 @@ class _HomeScreenState extends State<HomeScreen> {
                               final dataPub =
                                   (data['dataPublicacao'] as Timestamp?)
                                       ?.toDate();
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ArtigoDetalheScreen(artigoId: doc.id),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
                                         color: Colors.black12,
                                         blurRadius: 4,
-                                        offset: const Offset(0, 2))
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(titulo,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        titulo,
                                         style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16)),
-                                    const SizedBox(height: 6),
-                                    Text("$autor • $ppg",
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        "$autor • $ppg",
                                         style: const TextStyle(
-                                            fontSize: 13, color: Colors.grey)),
-                                    const SizedBox(height: 8),
-                                    Text(resumo,
+                                          fontSize: 13,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        resumo,
                                         maxLines: 3,
                                         overflow: TextOverflow.ellipsis,
-                                        style:
-                                            const TextStyle(fontSize: 14)),
-                                    if (dataPub != null)
-                                      Text(
-                                        "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
-                                        style: const TextStyle(
-                                            fontSize: 12, color: Colors.grey),
+                                        style: const TextStyle(fontSize: 14),
                                       ),
-                                  ],
+                                      if (dataPub != null)
+                                        Text(
+                                          "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               );
                             },
                           );
-                        })
+                        },
+                      )
                     : FutureBuilder(
                         future: FirebaseFirestore.instance
                             .collection('menus')
@@ -353,7 +410,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (context, menuSnap) {
                           if (!menuSnap.hasData) {
                             return const Center(
-                                child: CircularProgressIndicator());
+                              child: CircularProgressIndicator(),
+                            );
                           }
 
                           final menus = menuSnap.data!.docs;
@@ -374,21 +432,52 @@ class _HomeScreenState extends State<HomeScreen> {
                                   onTap: () async {
                                     if (tipo == 'submenu') {
                                       Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) => MenuSubScreen(
-                                                    titulo: menu['nome'],
-                                                    subCollection: menu.reference
-                                                        .collection('submenus'),
-                                                  )));
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => MenuSubScreen(
+                                            titulo: menu['nome'],
+                                            subCollection: menu.reference
+                                                .collection('submenus'),
+                                          ),
+                                        ),
+                                      );
                                     } else if (tipo == 'artigos') {
                                       Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) => ArtigosScreen(
-                                                    titulo: menu['nome'],
-                                                    filtros: null,
-                                                  )));
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ArtigosScreen(
+                                            titulo: menu['nome'],
+                                            filtros: null,
+                                          ),
+                                        ),
+                                      );
+                                    } else if (tipo == 'contatos') {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ContatosScreen(
+                                            docRef: menu.reference,
+                                          ),
+                                        ),
+                                      );
+                                    } else if (tipo == 'quemsomos') {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => QuemSomosScreen(
+                                            docRef: menu.reference,
+                                          ),
+                                        ),
+                                      );
+                                    } else if (tipo == 'texto') {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => TextoScreen(
+                                            docRef: menu.reference,
+                                          ),
+                                        ),
+                                      );
                                     }
                                   },
                                 );
@@ -406,40 +495,50 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 50),
-                   Padding(
-  padding: const EdgeInsets.only(left: 14), // ← aumente ou diminua
-  child: Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const Text(
-        "Divulga Pampa",
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 32,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      const SizedBox(width: 8),
-      Image.asset('assets/logo.png', height: 130, fit: BoxFit.contain),
-    ],
-  ),
-),
+                  const SizedBox(height: 65),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          fit: BoxFit.scaleDown,
+                          child: const Text(
+                            'Divulga Pampa',
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 140,
+                        child: Image.asset(
+                          'assets/logo.png',
+                          height: 105,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 5),
                   Row(
                     children: [
                       Expanded(
                         child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2))
+                                color: Colors.black26,
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
                             ],
                           ),
                           child: TextField(
@@ -447,8 +546,10 @@ class _HomeScreenState extends State<HomeScreen> {
                             decoration: const InputDecoration(
                               hintText: "Pesquise postagens...",
                               border: InputBorder.none,
-                              icon: Icon(Icons.search,
-                                  color: Color(0xFF0F6E58)),
+                              icon: Icon(
+                                Icons.search,
+                                color: Color(0xFF0F6E58),
+                              ),
                             ),
                             onChanged: (v) =>
                                 setState(() => _termoPesquisa = v),
@@ -465,13 +566,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2))
+                                color: Colors.black26,
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
                             ],
                           ),
-                          child: const Icon(Icons.filter_list,
-                              color: Color(0xFF0F6E58)),
+                          child: const Icon(
+                            Icons.filter_list,
+                            color: Color(0xFF0F6E58),
+                          ),
                         ),
                       ),
                     ],

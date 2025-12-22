@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:divulgapampa/views/artigosscreen.dart';
+import 'package:divulgapampa/views/postscreen.dart';
 import 'package:divulgapampa/views/contatosscreen.dart';
 import 'package:divulgapampa/views/quemsomosscreen.dart';
 import 'package:divulgapampa/views/textoscreen.dart';
@@ -38,6 +39,7 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
   String _termoPesquisa = '';
   int? _anoInicial;
   int? _anoFinal;
+  final List<MapEntry<String, String>> _clientSideFilters = [];
 
   IconData _iconeFromString(String nome) {
     switch (nome) {
@@ -77,9 +79,24 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
         .orderBy('dataPublicacao', descending: true);
 
     // aplica os filtros acumulados (ex: ppg + área)
+    _clientSideFilters.clear();
     if (widget.filtros != null && widget.filtros!.isNotEmpty) {
+      // Firestore não permite múltiplos `arrayContains`.
+      // Aplicamos no máximo 1 no servidor e o resto filtramos em memória.
+      String? arrayCampoAplicado;
+
       widget.filtros!.forEach((campo, valor) {
-        q = q.where(campo, arrayContains: valor);
+        final isArray = campo == 'linhasPesquisaIds' || campo.endsWith('Ids');
+        if (isArray) {
+          if (arrayCampoAplicado == null) {
+            arrayCampoAplicado = campo;
+            q = q.where(campo, arrayContains: valor);
+          } else {
+            _clientSideFilters.add(MapEntry(campo, valor));
+          }
+        } else {
+          q = q.where(campo, isEqualTo: valor);
+        }
       });
     }
 
@@ -106,6 +123,23 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
     }
 
     return q;
+  }
+
+  bool _matchesClientSideFilters(Map<String, dynamic> data) {
+    if (_clientSideFilters.isEmpty) return true;
+    for (final f in _clientSideFilters) {
+      final campo = f.key;
+      final valor = f.value;
+      final isArray = campo == 'linhasPesquisaIds' || campo.endsWith('Ids');
+      final v = data[campo];
+      if (isArray) {
+        final list = (v as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
+        if (!list.contains(valor)) return false;
+      } else {
+        if ((v ?? '').toString() != valor) return false;
+      }
+    }
+    return true;
   }
 
   bool _matchesSearch(Map<String, dynamic> data, String termoLower) {
@@ -241,7 +275,7 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F6E58),
-      bottomNavigationBar: const CustomNavBar(),
+      bottomNavigationBar: CustomNavBar(),
       body: SafeArea(
         child: Stack(
           children: [
@@ -269,7 +303,8 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
 
                           final filtered = docs.where((doc) {
                             final data = doc.data() as Map<String, dynamic>;
-                            return _matchesSearch(data, termoLower);
+                            return _matchesClientSideFilters(data) &&
+                                _matchesSearch(data, termoLower);
                           }).toList();
 
                           if (filtered.isEmpty) {
@@ -281,49 +316,60 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
                             padding: const EdgeInsets.all(16),
                             itemCount: filtered.length,
                             itemBuilder: (context, i) {
+                              final doc = filtered[i];
                               final data =
-                                  filtered[i].data() as Map<String, dynamic>;
+                                  doc.data() as Map<String, dynamic>;
                               final dataPub = (data['dataPublicacao']
                                       as Timestamp?)
                                   ?.toDate();
 
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                        color: Colors.black12,
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2))
-                                  ],
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(data['titulo'] ?? '',
-                                        style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold)),
-                                    const SizedBox(height: 6),
-                                    Text(data['autor'] ?? '',
-                                        style: const TextStyle(
-                                            color: Colors.grey)),
-                                    const SizedBox(height: 8),
-                                    Text(data['resumo'] ?? '',
-                                        maxLines: 3,
-                                        overflow: TextOverflow.ellipsis,
-                                        style:
-                                            const TextStyle(fontSize: 14)),
-                                    if (dataPub != null)
-                                      Text(
-                                          "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ArtigoDetalheScreen(artigoId: doc.id),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: Colors.black12,
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2))
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(data['titulo'] ?? '',
                                           style: const TextStyle(
-                                              fontSize: 12,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 6),
+                                      Text(data['autor'] ?? '',
+                                          style: const TextStyle(
                                               color: Colors.grey)),
-                                  ],
+                                      const SizedBox(height: 8),
+                                      Text(data['resumo'] ?? '',
+                                          maxLines: 3,
+                                          overflow: TextOverflow.ellipsis,
+                                          style:
+                                              const TextStyle(fontSize: 14)),
+                                      if (dataPub != null)
+                                        Text(
+                                            "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey)),
+                                    ],
+                                  ),
                                 ),
                               );
                             },

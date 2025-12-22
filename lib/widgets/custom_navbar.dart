@@ -5,26 +5,64 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:divulgapampa/homescreen.dart';
 import 'package:divulgapampa/views/loginScreen.dart';
 import 'package:divulgapampa/views/perfilscreen.dart';
+import 'package:divulgapampa/views/admin/admin_home_screen.dart';
+import 'package:divulgapampa/views/leader/leader_home_screen.dart';
+import 'package:divulgapampa/models/user_profile.dart';
+import 'package:divulgapampa/services/user_profile_service.dart';
+
+enum NavDestination { home, manage, profile }
 
 class CustomNavBar extends StatelessWidget {
-  final String tipoUsuario; // 'discente', 'docente', 'outros', 'lider', 'superuser' ou '' se não logado
-  final int selectedIndex;
+  final String tipoUsuario; // opcional (se vazio, carrega via Firestore)
+  final NavDestination selected;
+  final UserProfileService? profileService;
 
-  const CustomNavBar({
+  CustomNavBar({
     super.key,
     this.tipoUsuario = '', // vazio significa "não logado"
-    this.selectedIndex = 0,
+    this.selected = NavDestination.home,
+    this.profileService,
   });
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final bool isAdmin = tipoUsuario == 'lider' || tipoUsuario == 'superuser';
+
+    if (user == null) {
+      return _buildBar(context, user: null, role: UserRole.unknown);
+    }
+
+    if (tipoUsuario.trim().isNotEmpty) {
+      return _buildBar(
+        context,
+        user: user,
+        role: UserProfile.parseRole(tipoUsuario),
+      );
+    }
+
+    return StreamBuilder<UserProfile?>(
+      stream: (profileService ?? UserProfileService())
+          .watchCurrentUserProfile(),
+      builder: (context, snap) {
+        final role = snap.data?.role ?? UserRole.unknown;
+        return _buildBar(context, user: user, role: role);
+      },
+    );
+  }
+
+  Widget _buildBar(
+    BuildContext context, {
+    required User? user,
+    required UserRole role,
+  }) {
+    final bool isSuperuser = role == UserRole.superuser;
+    final bool isLeader = role == UserRole.lider;
 
     final List<_NavItem> items = [
       _NavItem(
         icon: PhosphorIcons.house(),
         label: 'Início',
+        destination: NavDestination.home,
         onTap: () {
           Navigator.pushReplacement(
             context,
@@ -32,17 +70,34 @@ class CustomNavBar extends StatelessWidget {
           );
         },
       ),
-
-      if (isAdmin)
+      if (isSuperuser)
         _NavItem(
           icon: PhosphorIcons.squaresFour(),
           label: 'Gerenciar',
-          onTap: () {},
+          destination: NavDestination.manage,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AdminHomeScreen()),
+            );
+          },
         ),
-
+      if (!isSuperuser && isLeader)
+        _NavItem(
+          icon: PhosphorIcons.squaresFour(),
+          label: 'Gerenciar',
+          destination: NavDestination.manage,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LeaderHomeScreen()),
+            );
+          },
+        ),
       _NavItem(
         icon: PhosphorIcons.user(),
         label: user == null ? 'Login' : 'Perfil',
+        destination: NavDestination.profile,
         onTap: () {
           if (user == null) {
             Navigator.pushReplacement(
@@ -59,6 +114,10 @@ class CustomNavBar extends StatelessWidget {
       ),
     ];
 
+    final effectiveSelected = (isSuperuser || isLeader)
+        ? selected
+        : (selected == NavDestination.manage ? NavDestination.home : selected);
+
     return Container(
       height: 65,
       decoration: const BoxDecoration(
@@ -74,10 +133,8 @@ class CustomNavBar extends StatelessWidget {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(items.length, (index) {
-          final item = items[index];
-          final isSelected = index == selectedIndex;
-
+        children: items.map((item) {
+          final isSelected = item.destination == effectiveSelected;
           return GestureDetector(
             onTap: item.onTap,
             child: Column(
@@ -104,7 +161,7 @@ class CustomNavBar extends StatelessWidget {
               ],
             ),
           );
-        }),
+        }).toList(),
       ),
     );
   }
@@ -114,10 +171,12 @@ class _NavItem {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final NavDestination destination;
 
   _NavItem({
     required this.icon,
     required this.label,
     required this.onTap,
+    required this.destination,
   });
 }

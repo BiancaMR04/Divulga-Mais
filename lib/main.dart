@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:divulgapampa/homescreen.dart';
 import 'package:divulgapampa/views/cadastroScreen.dart';
 import 'package:divulgapampa/views/loginScreen.dart';

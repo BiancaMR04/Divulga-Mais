@@ -1,0 +1,157 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/usuarios/$(uid));
+    }
+
+    function isActiveUser() {
+      return signedIn() && userDoc(request.auth.uid).exists && (userDoc(request.auth.uid).data.ativo != false);
+    }
+
+    function isSuperuser() {
+      return isActiveUser() && (userDoc(request.auth.uid).data.tipo == 'superuser');
+    }
+
+    function isLeader() {
+      return isActiveUser() && (userDoc(request.auth.uid).data.tipo == 'lider');
+    }
+
+    function leaderScopeType() {
+      return userDoc(request.auth.uid).data.liderScopeType;
+    }
+
+    function leaderScopeId() {
+      return userDoc(request.auth.uid).data.liderScopeId;
+    }
+
+    function leaderHasScope() {
+      return isLeader() && (leaderScopeType() in ['ppg', 'grupo']) && (leaderScopeId() is string) && (leaderScopeId().size() > 0);
+    }
+
+    function articleMatchesLeaderScope(data) {
+      return leaderHasScope() && (
+        (leaderScopeType() == 'ppg' && data.ppgId == leaderScopeId())
+        ||
+        (leaderScopeType() == 'grupo' && data.grupoPesquisaId == leaderScopeId())
+      );
+    }
+
+    function leaderCanCreateArticle() {
+      // Exige autoria e escopo coerente (evita líder publicar fora do que gerencia)
+      return leaderHasScope()
+        && request.resource.data.autorUid == request.auth.uid
+        && (
+          (leaderScopeType() == 'ppg' && request.resource.data.ppgId == leaderScopeId() && !(request.resource.data.grupoPesquisaId is string && request.resource.data.grupoPesquisaId.size() > 0))
+          ||
+          (leaderScopeType() == 'grupo' && request.resource.data.grupoPesquisaId == leaderScopeId() && !(request.resource.data.ppgId is string && request.resource.data.ppgId.size() > 0))
+        );
+    }
+
+    function leaderCanUpdateArticle() {
+      // Mantém autoria e escopo; permite editar conteúdo, categoria, mídia, etc.
+      return leaderHasScope()
+        && resource.data.autorUid == request.auth.uid
+        && request.resource.data.autorUid == request.auth.uid
+        && articleMatchesLeaderScope(resource.data)
+        && articleMatchesLeaderScope(request.resource.data);
+    }
+
+    function leaderCanDeleteArticle() {
+      return leaderHasScope()
+        && resource.data.autorUid == request.auth.uid
+        && articleMatchesLeaderScope(resource.data);
+    }
+
+    function menuIsPpg(menuId) {
+      return get(/databases/$(database)/documents/menus/$(menuId)).data.campoFiltro in ['ppgId', 'ppgIds'];
+    }
+
+    function menuIsGrupo(menuId) {
+      return get(/databases/$(database)/documents/menus/$(menuId)).data.campoFiltro in ['grupoPesquisaId', 'grupoPesquisaIds'];
+    }
+
+    function leaderOwnsScope(menuId, scopeDocId) {
+      return leaderHasScope()
+        && (
+          (leaderScopeType() == 'ppg' && menuIsPpg(menuId))
+          ||
+          (leaderScopeType() == 'grupo' && menuIsGrupo(menuId))
+        )
+        && get(/databases/$(database)/documents/menus/$(menuId)/submenus/$(scopeDocId)).data.valorFiltro == leaderScopeId();
+    }
+
+    // ---- Menus + submenus (admin only for writes) ----
+    match /menus/{menuId} {
+      allow read: if true;
+      allow create, update, delete: if isSuperuser();
+
+      match /submenus/{docId} {
+        allow read: if true;
+        allow create, update, delete: if isSuperuser();
+
+        // Escrita do líder apenas dentro do seu escopo (PPG/Grupo)
+        match /submenus/{scopeChildId} {
+          allow read: if true;
+          allow create, update, delete: if isSuperuser() || leaderOwnsScope(menuId, docId);
+
+          match /{deep=**} {
+            allow read: if true;
+            allow create, update, delete: if isSuperuser() || leaderOwnsScope(menuId, docId);
+          }
+        }
+      }
+    }
+
+    // ---- Artigos ----
+    match /artigos/{artigoId} {
+      // Usuário comum lê apenas ativos; superuser pode ler tudo
+      allow get, list: if resource.data.ativo == true || isSuperuser() || (isLeader() && articleMatchesLeaderScope(resource.data));
+
+      // Escrita/edição/moderação: superuser (pode ampliar para lider depois)
+      allow create: if isSuperuser() || (isLeader() && leaderCanCreateArticle());
+      allow update: if isSuperuser() || (isLeader() && leaderCanUpdateArticle());
+      allow delete: if isSuperuser() || (isLeader() && leaderCanDeleteArticle());
+    }
+
+    // ---- Usuários ----
+    match /usuarios/{uid} {
+      // Próprio usuário pode ler seu doc; superuser pode ler todos
+      allow get: if signedIn() && (request.auth.uid == uid || isSuperuser());
+      allow list: if isSuperuser();
+
+      // Criação do perfil no cadastro: só o próprio uid e sem escalonar privilégio
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && (request.resource.data.tipo in ['discente','docente','tae','outros','comum'])
+        && request.resource.data.keys().hasAll(['nome','email']);
+
+      // Update: superuser pode tudo; usuário comum pode atualizar apenas campos básicos
+      allow update: if isSuperuser()
+        || (
+          signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['nome','email'])
+        );
+
+      allow delete: if isSuperuser();
+    }
+
+    // ---- Analytics (anônimo no payload, mas exige auth ativo) ----
+    match /analytics_daily/{dayId} {
+      allow read: if isSuperuser();
+      allow create, update: if isActiveUser();
+      allow delete: if isSuperuser();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

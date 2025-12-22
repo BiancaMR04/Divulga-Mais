@@ -46,7 +46,10 @@ app.*.map.json
 
 # --- Secrets / Signing (Google Play, Firebase, etc.) ---
 # Android signing configs
-/android/key.properties
+/android/app/key.properties
+
+# Local Android SDK path
+/android/local.properties
 
 # Keystores / certificates (never commit)
 **/*.jks
@@ -64,6 +67,9 @@ app.*.map.json
 **/googleplay*.json
 **/play-*.json
 
+# Firebase Admin SDK service account credentials
+**/*firebase-adminsdk-*.json
+
 # Firebase config files (contain API keys; many teams choose to commit, but ignore if you treat them as secrets)
 /android/app/google-services.json
 /ios/Runner/GoogleService-Info.plist
@@ -73,3 +79,8 @@ app.*.map.json
 .env.*
 !.env.example
 !.env.sample
+
+# Firebase local cache / emulators
+.firebase/
+firebase-debug.log
+firestore-debug.log

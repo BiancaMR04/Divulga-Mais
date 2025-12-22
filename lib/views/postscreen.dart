@@ -3,11 +3,24 @@ import 'package:divulgapampa/widgets/custom_navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:intl/intl.dart';
+import 'package:divulgapampa/services/analytics_service.dart';
 
-class ArtigoDetalheScreen extends StatelessWidget {
+class ArtigoDetalheScreen extends StatefulWidget {
   final String artigoId;
 
   const ArtigoDetalheScreen({super.key, required this.artigoId});
+
+  @override
+  State<ArtigoDetalheScreen> createState() => _ArtigoDetalheScreenState();
+}
+
+class _ArtigoDetalheScreenState extends State<ArtigoDetalheScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget: agregação diária sem PII.
+    AnalyticsService().trackArticleView(artigoId: widget.artigoId);
+  }
 
   Future<String> _getNomePPG(String ppgId) async {
     if (ppgId.isEmpty) return "";
@@ -31,7 +44,7 @@ class ArtigoDetalheScreen extends StatelessWidget {
         child: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
               .collection('artigos')
-              .doc(artigoId)
+              .doc(widget.artigoId)
               .snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {

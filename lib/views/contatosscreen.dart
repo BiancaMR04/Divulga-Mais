@@ -8,25 +8,144 @@ class ContatosScreen extends StatelessWidget {
   final DocumentReference docRef;
   const ContatosScreen({super.key, required this.docRef});
 
-  Future<void> _abrirUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+  void _showCantOpen(BuildContext context, String label) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Não foi possível abrir: $label'),
+      ),
+    );
   }
 
-  Future<void> _ligar(String telefone) async {
-    final uri = Uri(scheme: 'tel', path: telefone);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+  Uri? _tryParseWebUrl(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+
+    // Already has a scheme
+    final parsed = Uri.tryParse(text);
+    if (parsed != null && parsed.hasScheme) return parsed;
+
+    // Common case: user stored "instagram.com/..." or "www..."
+    final withHttps = Uri.tryParse('https://$text');
+    return withHttps;
   }
 
-  Future<void> _enviarEmail(String email) async {
-    final uri = Uri(scheme: 'mailto', path: email);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
+  List<String> _asStringList(dynamic v) {
+    if (v == null) return const <String>[];
+    if (v is List) {
+      return v
+          .map((e) => e?.toString() ?? '')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
     }
+    if (v is String) {
+      final s = v.trim();
+      return s.isEmpty ? const <String>[] : <String>[s];
+    }
+    if (v is Map) {
+      return v.values
+          .map((e) => e?.toString() ?? '')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    final s = v.toString().trim();
+    return s.isEmpty ? const <String>[] : <String>[s];
+  }
+
+  List<Map<String, dynamic>> _asRedesList(dynamic v) {
+    if (v == null) return const <Map<String, dynamic>>[];
+
+    if (v is List) {
+      return v
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .where((m) {
+            final nome = (m['nome'] ?? '').toString().trim();
+            final url = (m['url'] ?? '').toString().trim();
+            return nome.isNotEmpty || url.isNotEmpty;
+          })
+          .toList();
+    }
+
+    if (v is Map) {
+      final map = Map<String, dynamic>.from(v);
+
+      // Caso já seja {nome: ..., url: ...}
+      if (map.containsKey('nome') || map.containsKey('url')) {
+        return <Map<String, dynamic>>[map];
+      }
+
+      // Caso comum: { instagram: 'https://...', facebook: 'https://...' }
+      // ou: { instagram: {url: '...'}, ... }
+      final redes = <Map<String, dynamic>>[];
+      for (final entry in map.entries) {
+        final keyName = entry.key.toString().trim();
+        if (keyName.isEmpty) continue;
+
+        final value = entry.value;
+        String url = '';
+        String displayName = keyName;
+        if (value is String) {
+          url = value.trim();
+        } else if (value is Map) {
+          final vm = Map<String, dynamic>.from(value);
+          final vmName = (vm['nome'] ?? vm['titulo'] ?? '').toString().trim();
+          if (vmName.isNotEmpty) displayName = vmName;
+          url = (vm['url'] ?? vm['link'] ?? vm['href'] ?? '').toString().trim();
+        } else if (value != null) {
+          url = value.toString().trim();
+        }
+
+        if (url.isEmpty) continue;
+        redes.add({'nome': displayName, 'url': url});
+      }
+      return redes;
+    }
+
+    return const <Map<String, dynamic>>[];
+  }
+
+  Future<void> _abrirUrl(BuildContext context, String url) async {
+    final uri = _tryParseWebUrl(url);
+    if (uri == null) {
+      _showCantOpen(context, url);
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) _showCantOpen(context, url);
+  }
+
+  Future<void> _ligar(BuildContext context, String telefone) async {
+    final tel = telefone.trim();
+    if (tel.isEmpty) {
+      _showCantOpen(context, telefone);
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: tel);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) _showCantOpen(context, telefone);
+  }
+
+  Future<void> _enviarEmail(BuildContext context, String email) async {
+    final e = email.trim();
+    if (e.isEmpty) {
+      _showCantOpen(context, email);
+      return;
+    }
+
+    // Allow storing "mailto:foo@bar.com" as well
+    Uri? uri = Uri.tryParse(e);
+    if (uri == null) {
+      _showCantOpen(context, email);
+      return;
+    }
+    if (!uri.hasScheme) {
+      uri = Uri(scheme: 'mailto', path: e);
+    }
+
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) _showCantOpen(context, email);
   }
 
   IconData _iconeRede(String nome) {
@@ -92,9 +211,16 @@ class ContatosScreen extends StatelessWidget {
 
                     final data = snapshot.data!.data() as Map<String, dynamic>;
                     final String docNome = (data['nome'] ?? '').toString();
-                    final telefones = List<String>.from(data['telefones'] ?? []);
-                    final emails = List<String>.from(data['emails'] ?? []);
-                    final redes = List<Map<String, dynamic>>.from(data['redes'] ?? []);
+                    final telefones = _asStringList(
+                      data['telefones'] ?? data['telefone'] ?? data['fone'] ?? data['fones'],
+                    );
+                    final emails = _asStringList(
+                      data['emails'] ?? data['email'] ?? data['e-mail'] ?? data['e-mails'],
+                    );
+                    final redesRaw =
+                        data['redes'] ?? data['rede'] ?? data['redesSociais'] ?? data['redes_sociais'];
+                    final redes = _asRedesList(redesRaw);
+                    final bool hasRawRedes = redesRaw != null;
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,7 +247,7 @@ class ContatosScreen extends StatelessWidget {
                                 ...telefones.map((t) => _buildCardContato(
                                       icon: PhosphorIcons.phone(),
                                       label: t,
-                                      onTap: () => _ligar(t),
+                                    onTap: () => _ligar(context, t),
                                     )),
                                 const SizedBox(height: 14),
                               ],
@@ -133,7 +259,7 @@ class ContatosScreen extends StatelessWidget {
                                 ...emails.map((e) => _buildCardContato(
                                       icon: PhosphorIcons.envelope(),
                                       label: e,
-                                      onTap: () => _enviarEmail(e),
+                                    onTap: () => _enviarEmail(context, e),
                                     )),
                                 const SizedBox(height: 14),
                               ],
@@ -142,11 +268,24 @@ class ContatosScreen extends StatelessWidget {
                                 const Text('🌐 Redes Sociais',
                                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                 const SizedBox(height: 8),
-                                ...redes.map((r) => _buildCardContato(
-                                      icon: _iconeRede(r['nome'] ?? ''),
-                                      label: r['nome'] ?? '',
-                                      onTap: () => _abrirUrl(r['url'] ?? ''),
-                                    )),
+                                ...redes.map((r) {
+                                  final nomeRede = (r['nome'] ?? '').toString();
+                                  final urlRede = (r['url'] ?? '').toString();
+                                  return _buildCardContato(
+                                    icon: _iconeRede(nomeRede),
+                                    label: nomeRede,
+                                    onTap: () => _abrirUrl(context, urlRede),
+                                  );
+                                }),
+                                const SizedBox(height: 14),
+                              ] else if (hasRawRedes) ...[
+                                const Text('🌐 Redes Sociais',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Nenhuma rede social encontrada (verifique o formato do campo "redes").',
+                                  style: TextStyle(color: Colors.black54),
+                                ),
                                 const SizedBox(height: 14),
                               ],
 

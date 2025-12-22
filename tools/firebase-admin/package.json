@@ -1,0 +1,11 @@
+{
+  "name": "divulgapampa-admin-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "promote:superuser": "node promote-superuser.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

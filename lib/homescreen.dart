@@ -267,7 +267,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
     const double topOffset = 160;
+    final logoWidth = (screen.width * 0.30).clamp(90.0, 140.0);
+    final logoHeight = (logoWidth * 0.75).clamp(60.0, 105.0);
     final filtroAtivo =
         _termoPesquisa.isNotEmpty ||
         _anoInicial != null ||
@@ -495,7 +498,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 65),
+                  const SizedBox(height: 75),
                   Row(
                     children: [
                       Expanded(
@@ -515,10 +518,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(width: 12),
                       SizedBox(
-                        width: 140,
+                        width: logoWidth,
                         child: Image.asset(
                           'assets/logo.png',
-                          height: 105,
+                          height: logoHeight,
                           fit: BoxFit.contain,
                         ),
                       ),

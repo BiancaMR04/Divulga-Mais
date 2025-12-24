@@ -268,7 +268,12 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
     const double topOffset = 160;
+    // Mantém a barra de pesquisa na mesma altura visual de antes,
+    // mas permite encolher em telas menores.
+    final logoHeight = (screen.height * 0.16).clamp(110.0, 130.0);
+    final logoWidth = (logoHeight * 1.08).clamp(100.0, 160.0);
 
     final bool mostrarArtigos =
         _termoPesquisa.isNotEmpty || _anoInicial != null || _anoFinal != null;
@@ -491,25 +496,35 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
                         onPressed: () => Navigator.pop(context),
                       ),
                       Expanded(
-                        child: Text(widget.titulo,
+                        child: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            widget.titulo,
+                            maxLines: 1,
+                            softWrap: false,
                             style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold)),
-                                
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8), // espaço entre texto e logo
-          Image.asset(
-            'assets/logo.png',
-            height: 130, // ajuste o tamanho como preferir
-            fit: BoxFit.contain,
-          ),
+                      SizedBox(
+                        width: logoWidth,
+                        child: Image.asset(
+                          'assets/logo.png',
+                          height: logoHeight,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     ],
                   ),
                   
                   const SizedBox(height: 10),
                   Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Expanded(
                         child: Container(

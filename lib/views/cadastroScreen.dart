@@ -79,6 +79,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final topOffset = (screenHeight * 0.22).clamp(120.0, 180.0);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F6E58),
       bottomNavigationBar: CustomNavBar(),
@@ -87,23 +90,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Positioned.fill(
             child: Image.asset('assets/home.png', fit: BoxFit.cover),
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
+          Positioned.fill(
+            top: topOffset,
             child: Container(
-              height: MediaQuery.of(context).size.height,
-              margin: const EdgeInsets.only(top: 160),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(32)),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
               ),
               child: SingleChildScrollView(
                 child: Center(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: ConstrainedBox(
-                      constraints:
-                          const BoxConstraints(maxWidth: 320),
+                      constraints: const BoxConstraints(maxWidth: 320),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -149,27 +148,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 const SizedBox(height: 10),
                                 DropdownButtonFormField<String>(
                                   value: _tipoUsuario,
-                                  decoration:
-                                      _fieldDecoration('Tipo de usuário'),
+                                  decoration: _fieldDecoration('Tipo de usuário'),
                                   items: const [
-                                    DropdownMenuItem(
-                                        value: 'discente',
-                                        child: Text('Discente')),
-                                    DropdownMenuItem(
-                                        value: 'docente',
-                                        child: Text('Docente')),
-                                    DropdownMenuItem(
-                                        value: 'tae',
-                                        child: Text('TAE')),
-                                    DropdownMenuItem(
-                                        value: 'outros',
-                                        child: Text('Outros')),
+                                    DropdownMenuItem(value: 'discente', child: Text('Discente')),
+                                    DropdownMenuItem(value: 'docente', child: Text('Docente')),
+                                    DropdownMenuItem(value: 'tae', child: Text('TAE')),
+                                    DropdownMenuItem(value: 'outros', child: Text('Outros')),
                                   ],
-                                  onChanged: (v) =>
-                                      setState(() => _tipoUsuario = v),
-                                  validator: (v) => v == null
-                                      ? 'Selecione o tipo de usuário'
-                                      : null,
+                                  onChanged: (v) => setState(() => _tipoUsuario = v),
+                                  validator: (v) => v == null ? 'Selecione o tipo de usuário' : null,
                                 ),
                                 const SizedBox(height: 10),
                                 TextFormField(
@@ -184,8 +171,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 TextFormField(
                                   controller: _confirmarCtrl,
                                   obscureText: true,
-                                  decoration: _fieldDecoration(
-                                      'Confirmação de senha'),
+                                  decoration: _fieldDecoration('Confirmação de senha'),
                                   validator: (v) {
                                     if (v == null || v.isEmpty) {
                                       return 'Confirme sua senha';
@@ -198,18 +184,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 SizedBox(
-                                  width: 315,
+                                  width: double.infinity,
                                   child: ElevatedButton(
                                     onPressed: _loading ? null : _register,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          const Color(0xFF0F6E58),
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                              vertical: 12),
+                                      backgroundColor: const Color(0xFF0F6E58),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                       elevation: 0,
                                     ),
@@ -217,8 +199,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         ? const SizedBox(
                                             height: 18,
                                             width: 18,
-                                            child:
-                                                CircularProgressIndicator(
+                                            child: CircularProgressIndicator(
                                               color: Colors.white,
                                               strokeWidth: 2,
                                             ),
@@ -234,22 +215,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 20),
-                                // Botão de destaque para login
                                 SizedBox(
-                                  width: 315,
+                                  width: double.infinity,
                                   child: ElevatedButton(
                                     onPressed: () {
                                       Navigator.pop(context);
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          const Color(0xFF98C8AD),
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                              vertical: 12),
+                                      backgroundColor: const Color(0xFF98C8AD),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                       elevation: 0,
                                     ),

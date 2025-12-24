@@ -97,6 +97,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final topOffset = (screenHeight * 0.22).clamp(120.0, 180.0);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F6E58),
       bottomNavigationBar: CustomNavBar(),
@@ -105,11 +108,9 @@ class _LoginScreenState extends State<LoginScreen> {
           Positioned.fill(
             child: Image.asset('assets/home.png', fit: BoxFit.cover),
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
+          Positioned.fill(
+            top: topOffset,
             child: Container(
-              height: MediaQuery.of(context).size.height,
-              margin: const EdgeInsets.only(top: 160),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
@@ -167,8 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   },
                                 ),
                                 Padding(
-                                  padding:
-                                      const EdgeInsets.only(top: 6, right: 4),
+                                  padding: const EdgeInsets.only(top: 6, right: 4),
                                   child: Align(
                                     alignment: Alignment.centerRight,
                                     child: TextButton(
@@ -189,17 +189,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 SizedBox(
-                                  width: 315,
+                                  width: double.infinity,
                                   child: ElevatedButton(
                                     onPressed: _loading ? null : _login,
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          const Color(0xFF0F6E58),
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
+                                      backgroundColor: const Color(0xFF0F6E58),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                       elevation: 0,
                                     ),
@@ -223,25 +220,20 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 20),
-                                // Botão de cadastro destacado
                                 SizedBox(
-                                  width: 315,
+                                  width: double.infinity,
                                   child: ElevatedButton(
                                     onPressed: () {
                                       Navigator.push(
                                         context,
-                                        MaterialPageRoute(
-                                            builder: (_) => RegisterScreen()),
+                                        MaterialPageRoute(builder: (_) => RegisterScreen()),
                                       );
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          const Color(0xFF98C8AD),
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
+                                      backgroundColor: const Color(0xFF98C8AD),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                       shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                       elevation: 0,
                                     ),

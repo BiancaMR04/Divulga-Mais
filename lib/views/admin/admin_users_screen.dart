@@ -250,86 +250,89 @@ Future<_LeaderScopeSelection?> _pickLeaderScope(
       builder: (context, setState) {
         return AlertDialog(
           title: const Text('Definir escopo do líder'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                RadioListTile<String>(
-                  title: const Text('PPG'),
-                  value: 'ppg',
-                  groupValue: type,
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() {
-                      type = v;
-                      selectedId = null;
-                      optionsFuture = _loadLeaderScopeOptions(type);
-                    });
-                  },
-                ),
-                RadioListTile<String>(
-                  title: const Text('Grupo de Pesquisa'),
-                  value: 'grupo',
-                  groupValue: type,
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() {
-                      type = v;
-                      selectedId = null;
-                      optionsFuture = _loadLeaderScopeOptions(type);
-                    });
-                  },
-                ),
-                const SizedBox(height: 8),
-                FutureBuilder<List<_LeaderScopeOption>>(
-                  future: optionsFuture,
-                  builder: (context, snap) {
-                    if (snap.hasError) {
-                      return Text(
-                        'Erro ao carregar opções: ${snap.error}',
-                        style: const TextStyle(color: Colors.red),
-                      );
-                    }
-                    if (!snap.hasData) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: LinearProgressIndicator(),
-                      );
-                    }
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<String>(
+                    title: const Text('PPG'),
+                    value: 'ppg',
+                    groupValue: type,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        type = v;
+                        selectedId = null;
+                        optionsFuture = _loadLeaderScopeOptions(type);
+                      });
+                    },
+                  ),
+                  RadioListTile<String>(
+                    title: const Text('Grupo de Pesquisa'),
+                    value: 'grupo',
+                    groupValue: type,
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setState(() {
+                        type = v;
+                        selectedId = null;
+                        optionsFuture = _loadLeaderScopeOptions(type);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  FutureBuilder<List<_LeaderScopeOption>>(
+                    future: optionsFuture,
+                    builder: (context, snap) {
+                      if (snap.hasError) {
+                        return Text(
+                          'Erro ao carregar opções: ${snap.error}',
+                          style: const TextStyle(color: Colors.red),
+                        );
+                      }
+                      if (!snap.hasData) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: LinearProgressIndicator(),
+                        );
+                      }
 
-                    final options = snap.data!;
-                    if (options.isEmpty) {
-                      return const Text(
-                        'Nenhuma opção encontrada. Verifique se existe o menu de PPGs/Grupos e se ele possui submenus.',
-                        style: TextStyle(color: Colors.black54),
+                      final options = snap.data!;
+                      if (options.isEmpty) {
+                        return const Text(
+                          'Nenhuma opção encontrada. Verifique se existe o menu de PPGs/Grupos e se ele possui submenus.',
+                          style: TextStyle(color: Colors.black54),
+                        );
+                      }
+
+                      // Se o initialId vier e existir, mantém.
+                      final hasSelected = selectedId != null && options.any((o) => o.id == selectedId);
+                      if (selectedId != null && !hasSelected) {
+                        selectedId = null;
+                      }
+
+                      return DropdownButtonFormField<String>(
+                        value: selectedId,
+                        decoration: InputDecoration(
+                          labelText: type == 'ppg' ? 'Selecione o PPG' : 'Selecione o grupo',
+                          border: const OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final o in options)
+                            DropdownMenuItem(
+                              value: o.id,
+                              child: Text(o.name.isEmpty ? o.id : o.name),
+                            ),
+                        ],
+                        onChanged: (v) => setState(() => selectedId = v),
                       );
-                    }
-
-                    // Se o initialId vier e existir, mantém.
-                    final hasSelected = selectedId != null && options.any((o) => o.id == selectedId);
-                    if (selectedId != null && !hasSelected) {
-                      selectedId = null;
-                    }
-
-                    return DropdownButtonFormField<String>(
-                      value: selectedId,
-                      decoration: InputDecoration(
-                        labelText: type == 'ppg' ? 'Selecione o PPG' : 'Selecione o grupo',
-                        border: const OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final o in options)
-                          DropdownMenuItem(
-                            value: o.id,
-                            child: Text(o.name.isEmpty ? o.id : o.name),
-                          ),
-                      ],
-                      onChanged: (v) => setState(() => selectedId = v),
-                    );
-                  },
-                ),
-              ],
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [

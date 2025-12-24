@@ -10,7 +10,8 @@ class LeaderHomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double topOffset = 160;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final topOffset = (screenHeight * 0.22).clamp(120.0, 180.0);
 
     return LeaderGate(
       child: Scaffold(
@@ -34,44 +35,45 @@ class LeaderHomeScreen extends StatelessWidget {
                     borderRadius:
                         BorderRadius.vertical(top: Radius.circular(32)),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const SizedBox(height: 10),
-                      const Text(
-                        "Gerenciar conteúdo:",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F6E58),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 10),
+                        const Text(
+                          "Gerenciar conteúdo:",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F6E58),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                      _LeaderCard(
-                        title: "Publicações",
-                        subtitle: "Criar, editar e excluir suas publicações",
-                        color: const Color(0xFF5AC89C),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const LeaderPostsScreen()),
+                        _LeaderCard(
+                          title: "Publicações",
+                          subtitle: "Criar, editar e excluir suas publicações",
+                          color: const Color(0xFF5AC89C),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const LeaderPostsScreen()),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 16),
 
-                      _LeaderCard(
-                        title: "Meu PPG / Grupo",
-                        subtitle:
-                            "Editar informações e linhas de pesquisa",
-                        color: const Color(0xFF9AA6FF),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const LeaderScopesScreen()),
+                        _LeaderCard(
+                          title: "Meu PPG / Grupo",
+                          subtitle: "Editar informações e linhas de pesquisa",
+                          color: const Color(0xFF9AA6FF),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const LeaderScopesScreen()),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -268,7 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    const double topOffset = 160;
+    final topSpacing = (screen.height * 0.04).clamp(12.0, 48.0);
     final logoWidth = (screen.width * 0.30).clamp(90.0, 140.0);
     final logoHeight = (logoWidth * 0.75).clamp(60.0, 105.0);
     final filtroAtivo =
@@ -289,302 +289,317 @@ class _HomeScreenState extends State<HomeScreen> {
             Positioned.fill(
               child: Image.asset('assets/home.png', fit: BoxFit.cover),
             ),
-
-            // Conteúdo
-            Positioned.fill(
-              top: topOffset,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF7F7F7),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: topSpacing),
+                      Row(
+                        children: [
+                          const SizedBox(width: 48),
+                          Expanded(
+                            child: FittedBox(
+                              alignment: Alignment.centerLeft,
+                              fit: BoxFit.scaleDown,
+                              child: const Text(
+                                'Divulga Pampa',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: logoWidth,
+                            child: Image.asset(
+                              'assets/logo.png',
+                              height: logoHeight,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
                 ),
-                padding: const EdgeInsets.only(top: 90),
-                child: filtroAtivo
-                    ? StreamBuilder<QuerySnapshot>(
-                        stream: _artigosQuery().snapshots(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          }
-
-                          final allDocs = snapshot.data!.docs;
-                          final termoLower = _termoPesquisa
-                              .toLowerCase()
-                              .trim();
-
-                          final filteredDocs = allDocs.where((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            return _matchesSearch(data, termoLower);
-                          }).toList();
-
-                          if (filteredDocs.isEmpty) {
-                            return const Center(
-                              child: Text("Nenhum artigo encontrado."),
-                            );
-                          }
-
-                          return ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: filteredDocs.length,
-                            itemBuilder: (context, i) {
-                              final doc = filteredDocs[i];
-                              final data = doc.data() as Map<String, dynamic>;
-                              final titulo = data['titulo'] ?? '';
-                              final autor = data['autor'] ?? '';
-                              final ppg = data['ppgId'] ?? '';
-                              final resumo = data['resumo'] ?? '';
-                              final dataPub =
-                                  (data['dataPublicacao'] as Timestamp?)
-                                      ?.toDate();
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          ArtigoDetalheScreen(artigoId: doc.id),
-                                    ),
-                                  );
-                                },
+                Expanded(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF7F7F7),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(32)),
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                          child: Row(
+                            children: [
+                              Expanded(
                                 child: Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black12,
-                                        blurRadius: 4,
+                                        color: Colors.black26,
+                                        blurRadius: 6,
                                         offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        titulo,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
+                                  child: TextField(
+                                    controller: _searchCtrl,
+                                    decoration: const InputDecoration(
+                                      hintText: "Pesquise postagens...",
+                                      border: InputBorder.none,
+                                      icon: Icon(
+                                        Icons.search,
+                                        color: Color(0xFF0F6E58),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        "$autor • $ppg",
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        resumo,
-                                        maxLines: 3,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                      if (dataPub != null)
-                                        Text(
-                                          "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                    ],
+                                    ),
+                                    onChanged: (v) =>
+                                        setState(() => _termoPesquisa = v),
                                   ),
                                 ),
-                              );
-                            },
-                          );
-                        },
-                      )
-                    : FutureBuilder(
-                        future: FirebaseFirestore.instance
-                            .collection('menus')
-                            .where('ativo', isEqualTo: true)
-                            .orderBy('ordem')
-                            .get(),
-                        builder: (context, menuSnap) {
-                          if (!menuSnap.hasData) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          }
+                              ),
+                              const SizedBox(width: 12),
+                              GestureDetector(
+                                onTap: _abrirFiltroAno,
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.filter_list,
+                                    color: Color(0xFF0F6E58),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: filtroAtivo
+                              ? StreamBuilder<QuerySnapshot>(
+                              stream: _artigosQuery().snapshots(),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
 
-                          final menus = menuSnap.data!.docs;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: GridView.count(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: 1.2,
-                              children: List.generate(menus.length, (index) {
-                                final menu = menus[index];
-                                final tipo = menu['tipo'] ?? 'submenu';
-                                return MenuCard(
-                                  titulo: menu['nome'],
-                                  icone: _iconeFromString(menu['icone']),
-                                  cor: _corPorIndice(index),
-                                  onTap: () async {
-                                    if (tipo == 'submenu') {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => MenuSubScreen(
-                                            titulo: menu['nome'],
-                                            subCollection: menu.reference
-                                                .collection('submenus'),
+                                final allDocs = snapshot.data!.docs;
+                                final termoLower =
+                                    _termoPesquisa.toLowerCase().trim();
+
+                                final filteredDocs = allDocs.where((doc) {
+                                  final data =
+                                      doc.data() as Map<String, dynamic>;
+                                  return _matchesSearch(data, termoLower);
+                                }).toList();
+
+                                if (filteredDocs.isEmpty) {
+                                  return const Center(
+                                    child: Text("Nenhum artigo encontrado."),
+                                  );
+                                }
+
+                                return ListView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: filteredDocs.length,
+                                  itemBuilder: (context, i) {
+                                    final doc = filteredDocs[i];
+                                    final data =
+                                        doc.data() as Map<String, dynamic>;
+                                    final titulo = data['titulo'] ?? '';
+                                    final autor = data['autor'] ?? '';
+                                    final ppg = data['ppgId'] ?? '';
+                                    final resumo = data['resumo'] ?? '';
+                                    final dataPub =
+                                        (data['dataPublicacao'] as Timestamp?)
+                                            ?.toDate();
+                                    return GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ArtigoDetalheScreen(
+                                                artigoId: doc.id),
                                           ),
+                                        );
+                                      },
+                                      child: Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 12),
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black12,
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
                                         ),
-                                      );
-                                    } else if (tipo == 'artigos') {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ArtigosScreen(
-                                            titulo: menu['nome'],
-                                            filtros: null,
-                                          ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              titulo,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              "$autor • $ppg",
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              resumo,
+                                              maxLines: 3,
+                                              overflow: TextOverflow.ellipsis,
+                                              style:
+                                                  const TextStyle(fontSize: 14),
+                                            ),
+                                            if (dataPub != null)
+                                              Text(
+                                                "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                          ],
                                         ),
-                                      );
-                                    } else if (tipo == 'contatos') {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ContatosScreen(
-                                            docRef: menu.reference,
-                                          ),
-                                        ),
-                                      );
-                                    } else if (tipo == 'quemsomos') {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => QuemSomosScreen(
-                                            docRef: menu.reference,
-                                          ),
-                                        ),
-                                      );
-                                    } else if (tipo == 'texto') {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => TextoScreen(
-                                            docRef: menu.reference,
-                                          ),
-                                        ),
-                                      );
-                                    }
+                                      ),
+                                    );
                                   },
                                 );
-                              }),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ),
+                              },
+                            )
+                              : FutureBuilder(
+                              future: FirebaseFirestore.instance
+                                  .collection('menus')
+                                  .where('ativo', isEqualTo: true)
+                                  .orderBy('ordem')
+                                  .get(),
+                              builder: (context, menuSnap) {
+                                if (!menuSnap.hasData) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
 
-            // ✅ topo + busca + filtro
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 75),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FittedBox(
-                          alignment: Alignment.centerLeft,
-                          fit: BoxFit.scaleDown,
-                          child: const Text(
-                            'Divulga Pampa',
-                            maxLines: 1,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
+                                final menus = menuSnap.data!.docs;
+                                return Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                                  child: GridView.count(
+                                    crossAxisCount: 2,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                    childAspectRatio: 1.2,
+                                    children:
+                                        List.generate(menus.length, (index) {
+                                      final menu = menus[index];
+                                      final tipo = menu['tipo'] ?? 'submenu';
+                                      return MenuCard(
+                                        titulo: menu['nome'],
+                                        icone: _iconeFromString(menu['icone']),
+                                        cor: _corPorIndice(index),
+                                        onTap: () async {
+                                          if (tipo == 'submenu') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => MenuSubScreen(
+                                                  titulo: menu['nome'],
+                                                  subCollection: menu.reference
+                                                      .collection('submenus'),
+                                                ),
+                                              ),
+                                            );
+                                          } else if (tipo == 'artigos') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => ArtigosScreen(
+                                                  titulo: menu['nome'],
+                                                  filtros: null,
+                                                ),
+                                              ),
+                                            );
+                                          } else if (tipo == 'contatos') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => ContatosScreen(
+                                                  docRef: menu.reference,
+                                                ),
+                                              ),
+                                            );
+                                          } else if (tipo == 'quemsomos') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => QuemSomosScreen(
+                                                  docRef: menu.reference,
+                                                ),
+                                              ),
+                                            );
+                                          } else if (tipo == 'texto') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => TextoScreen(
+                                                  docRef: menu.reference,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      );
+                                    }),
+                                  ),
+                                );
+                              },
                             ),
-                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: logoWidth,
-                        child: Image.asset(
-                          'assets/logo.png',
-                          height: logoHeight,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: TextField(
-                            controller: _searchCtrl,
-                            decoration: const InputDecoration(
-                              hintText: "Pesquise postagens...",
-                              border: InputBorder.none,
-                              icon: Icon(
-                                Icons.search,
-                                color: Color(0xFF0F6E58),
-                              ),
-                            ),
-                            onChanged: (v) =>
-                                setState(() => _termoPesquisa = v),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: _abrirFiltroAno,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.filter_list,
-                            color: Color(0xFF0F6E58),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),

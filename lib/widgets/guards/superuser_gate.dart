@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:divulgapampa/models/user_profile.dart';
 import 'package:divulgapampa/services/user_profile_service.dart';
+import 'package:divulgapampa/widgets/custom_navbar.dart';
 
 class SuperuserGate extends StatelessWidget {
   final Widget child;
@@ -19,8 +20,9 @@ class SuperuserGate extends StatelessWidget {
       stream: (service ?? UserProfileService()).watchCurrentUserProfile(),
       builder: (context, snap) {
         if (!snap.hasData) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            body: const Center(child: CircularProgressIndicator()),
+            bottomNavigationBar: CustomNavBar(selected: NavDestination.manage),
           );
         }
 
@@ -34,6 +36,7 @@ class SuperuserGate extends StatelessWidget {
               backgroundColor: const Color(0xFF0F6E58),
               foregroundColor: Colors.white,
             ),
+            bottomNavigationBar: CustomNavBar(selected: NavDestination.manage),
             body: const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),

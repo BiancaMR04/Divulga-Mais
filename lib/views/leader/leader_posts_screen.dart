@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:divulgapampa/models/user_profile.dart';
+import 'package:divulgapampa/services/storage_media_service.dart';
 import 'package:divulgapampa/services/user_profile_service.dart';
 import 'package:divulgapampa/views/leader/leader_article_editor_screen.dart';
 import 'package:divulgapampa/widgets/custom_navbar.dart';
@@ -63,7 +64,17 @@ class _LeaderPostsScreenState extends State<LeaderPostsScreen> {
     if (ok != true) return;
 
     try {
+      final snap = await ref.get();
+      final data = snap.data() ?? <String, dynamic>{};
+
+      final imagemStoragePath = (data['imagemStoragePath'] ?? '').toString().trim();
+      final videoStoragePath = (data['videoStoragePath'] ?? '').toString().trim();
+
       await ref.delete();
+
+      await StorageMediaService.deleteIfExists(imagemStoragePath);
+      await StorageMediaService.deleteIfExists(videoStoragePath);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Publicação excluída.')),

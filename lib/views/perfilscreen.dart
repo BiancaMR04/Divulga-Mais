@@ -16,6 +16,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
   User? _user = FirebaseAuth.instance.currentUser;
   Map<String, dynamic>? _userData;
   bool _loading = true;
+  bool _deleting = false;
 
   Future<void> _carregarUsuario() async {
     if (_user == null) return;
@@ -43,7 +44,88 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   Future<void> _logout() async {
     await FirebaseAuth.instance.signOut();
-    Navigator.pushNamedAndRemoveUntil(context, '/', (r) => false);
+    Navigator.pushNamedAndRemoveUntil(context, '/home', (r) => false);
+  }
+
+  bool _isCommonUser() {
+    final tipo = (_userData?['tipo'] ?? '').toString().trim().toLowerCase();
+    if (tipo.isEmpty) return true;
+    return tipo != 'superuser' && tipo != 'lider' && tipo != 'admin';
+  }
+
+  Future<void> _deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Excluir conta'),
+        content: const Text(
+          'Esta ação é permanente. Sua conta será excluída e você perderá o acesso.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      // Remove o perfil no Firestore (se existir)
+      await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(user.uid)
+          .delete()
+          .catchError((_) {});
+
+      // Exclui a conta do Firebase Auth
+      await user.delete();
+
+      await FirebaseAuth.instance.signOut();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Conta excluída com sucesso.')),
+      );
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (r) => false);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      if (e.code == 'requires-recent-login') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Por segurança, faça login novamente para excluir a conta.',
+            ),
+          ),
+        );
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Erro ao excluir conta')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao excluir conta: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   @override
@@ -161,6 +243,39 @@ class _PerfilScreenState extends State<PerfilScreen> {
                                         fontWeight: FontWeight.bold),
                                   ),
                                 ),
+
+                                if (_isCommonUser()) ...[
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    onPressed: _deleting ? null : _deleteAccount,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12, horizontal: 20),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    icon: _deleting
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(Icons.delete_forever,
+                                            color: Colors.white),
+                                    label: Text(
+                                      _deleting ? 'Excluindo...' : 'Excluir conta',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

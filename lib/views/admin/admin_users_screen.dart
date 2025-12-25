@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:divulgapampa/widgets/custom_navbar.dart';
 import 'package:divulgapampa/widgets/guards/superuser_gate.dart';
 
 class AdminUsersScreen extends StatefulWidget {
@@ -51,6 +52,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           backgroundColor: const Color(0xFF0F6E58),
           foregroundColor: Colors.white,
         ),
+        bottomNavigationBar: CustomNavBar(selected: NavDestination.manage),
         body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance.collection('usuarios').snapshots(),
           builder: (context, snap) {
@@ -254,84 +256,92 @@ Future<_LeaderScopeSelection?> _pickLeaderScope(
             constraints: const BoxConstraints(maxWidth: 420),
             child: SizedBox(
               width: double.infinity,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RadioListTile<String>(
-                    title: const Text('PPG'),
-                    value: 'ppg',
-                    groupValue: type,
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() {
-                        type = v;
-                        selectedId = null;
-                        optionsFuture = _loadLeaderScopeOptions(type);
-                      });
-                    },
-                  ),
-                  RadioListTile<String>(
-                    title: const Text('Grupo de Pesquisa'),
-                    value: 'grupo',
-                    groupValue: type,
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() {
-                        type = v;
-                        selectedId = null;
-                        optionsFuture = _loadLeaderScopeOptions(type);
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  FutureBuilder<List<_LeaderScopeOption>>(
-                    future: optionsFuture,
-                    builder: (context, snap) {
-                      if (snap.hasError) {
-                        return Text(
-                          'Erro ao carregar opções: ${snap.error}',
-                          style: const TextStyle(color: Colors.red),
-                        );
-                      }
-                      if (!snap.hasData) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: LinearProgressIndicator(),
-                        );
-                      }
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<String>(
+                      title: const Text('PPG'),
+                      value: 'ppg',
+                      groupValue: type,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          type = v;
+                          selectedId = null;
+                          optionsFuture = _loadLeaderScopeOptions(type);
+                        });
+                      },
+                    ),
+                    RadioListTile<String>(
+                      title: const Text('Grupo de Pesquisa'),
+                      value: 'grupo',
+                      groupValue: type,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          type = v;
+                          selectedId = null;
+                          optionsFuture = _loadLeaderScopeOptions(type);
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    FutureBuilder<List<_LeaderScopeOption>>(
+                      future: optionsFuture,
+                      builder: (context, snap) {
+                        if (snap.hasError) {
+                          return Text(
+                            'Erro ao carregar opções: ${snap.error}',
+                            style: const TextStyle(color: Colors.red),
+                          );
+                        }
+                        if (!snap.hasData) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: LinearProgressIndicator(),
+                          );
+                        }
 
-                      final options = snap.data!;
-                      if (options.isEmpty) {
-                        return const Text(
-                          'Nenhuma opção encontrada. Verifique se existe o menu de PPGs/Grupos e se ele possui submenus.',
-                          style: TextStyle(color: Colors.black54),
+                        final options = snap.data!;
+                        if (options.isEmpty) {
+                          return const Text(
+                            'Nenhuma opção encontrada. Verifique se existe o menu de PPGs/Grupos e se ele possui submenus.',
+                            style: TextStyle(color: Colors.black54),
+                          );
+                        }
+
+                        // Se o initialId vier e existir, mantém.
+                        final hasSelected = selectedId != null && options.any((o) => o.id == selectedId);
+                        if (selectedId != null && !hasSelected) {
+                          selectedId = null;
+                        }
+
+                        return DropdownButtonFormField<String>(
+                          value: selectedId,
+                          isExpanded: true,
+                          menuMaxHeight: 360,
+                          decoration: InputDecoration(
+                            labelText: type == 'ppg' ? 'Selecione o PPG' : 'Selecione o grupo',
+                            border: const OutlineInputBorder(),
+                          ),
+                          items: [
+                            for (final o in options)
+                              DropdownMenuItem(
+                                value: o.id,
+                                child: Text(
+                                  o.name.isEmpty ? o.id : o.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: (v) => setState(() => selectedId = v),
                         );
-                      }
-
-                      // Se o initialId vier e existir, mantém.
-                      final hasSelected = selectedId != null && options.any((o) => o.id == selectedId);
-                      if (selectedId != null && !hasSelected) {
-                        selectedId = null;
-                      }
-
-                      return DropdownButtonFormField<String>(
-                        value: selectedId,
-                        decoration: InputDecoration(
-                          labelText: type == 'ppg' ? 'Selecione o PPG' : 'Selecione o grupo',
-                          border: const OutlineInputBorder(),
-                        ),
-                        items: [
-                          for (final o in options)
-                            DropdownMenuItem(
-                              value: o.id,
-                              child: Text(o.name.isEmpty ? o.id : o.name),
-                            ),
-                        ],
-                        onChanged: (v) => setState(() => selectedId = v),
-                      );
-                    },
-                  ),
-                ],
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

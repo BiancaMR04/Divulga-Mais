@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:divulgapampa/widgets/custom_navbar.dart';
+
 class InserirMenusExemploScreen extends StatelessWidget {
   const InserirMenusExemploScreen({super.key});
 
@@ -182,6 +184,7 @@ class InserirMenusExemploScreen extends StatelessWidget {
         title: const Text("Inserir Menus de Exemplo"),
         backgroundColor: const Color(0xFF0F6E58),
       ),
+      bottomNavigationBar: CustomNavBar(selected: NavDestination.manage),
       body: Center(
         child: ElevatedButton(
           style: ElevatedButton.styleFrom(

@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'package:divulgapampa/models/user_profile.dart';
+import 'package:divulgapampa/services/storage_media_service.dart';
 import 'package:divulgapampa/widgets/custom_navbar.dart';
 
 class _NamedOption {
@@ -60,6 +62,16 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
   late final TextEditingController _videoCtrl;
   late final TextEditingController _tagsCsvCtrl;
 
+  PlatformFile? _pickedImagem;
+  PlatformFile? _pickedVideo;
+  bool _removeImagem = false;
+  bool _removeVideo = false;
+
+  late final String _initialImagemUrl;
+  late final String _initialVideoUrl;
+  late final String? _initialImagemStoragePath;
+  late final String? _initialVideoStoragePath;
+
   bool _ativo = true;
   bool _saving = false;
 
@@ -76,6 +88,15 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
     _imagemCtrl = TextEditingController(text: (d['imagem'] ?? '').toString());
     _linkCtrl = TextEditingController(text: (d['link'] ?? '').toString());
     _videoCtrl = TextEditingController(text: (d['video'] ?? '').toString());
+
+    _initialImagemUrl = (d['imagem'] ?? '').toString();
+    _initialVideoUrl = (d['video'] ?? '').toString();
+
+    final imgPath = (d['imagemStoragePath'] ?? '').toString().trim();
+    _initialImagemStoragePath = imgPath.isEmpty ? null : imgPath;
+
+    final vidPath = (d['videoStoragePath'] ?? '').toString().trim();
+    _initialVideoStoragePath = vidPath.isEmpty ? null : vidPath;
 
     String toCsv(dynamic v) {
       final list = (v as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
@@ -101,6 +122,60 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
     _linhasFuture = _loadLinhasDoEscopo(widget.scopeType, widget.scopeId);
 
     _ativo = (d['ativo'] as bool?) ?? true;
+  }
+
+  Future<void> _pickImagem() async {
+    try {
+      final file = await StorageMediaService.pickImage();
+      if (file == null) return;
+      if (file.size > StorageMediaService.maxBytes) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Arquivo excede o limite de 100MB.')),
+          );
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _pickedImagem = file;
+          _removeImagem = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao selecionar imagem: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    try {
+      final file = await StorageMediaService.pickVideo();
+      if (file == null) return;
+      if (file.size > StorageMediaService.maxBytes) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Arquivo excede o limite de 100MB.')),
+          );
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _pickedVideo = file;
+          _removeVideo = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao selecionar vídeo: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -236,6 +311,9 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
     final ok = _formKey.currentState?.validate() ?? false;
     if (!ok) return;
 
+    String? uploadedNewImagemPath;
+    String? uploadedNewVideoPath;
+
     setState(() => _saving = true);
     try {
       final authUser = FirebaseAuth.instance.currentUser;
@@ -243,15 +321,91 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
         throw Exception('Usuário não autenticado.');
       }
 
+      final docRef = _isEditing
+          ? widget.artigoRef!
+          : FirebaseFirestore.instance.collection('artigos').doc();
+
       final titulo = _tituloCtrl.text.trim();
       final resumo = _resumoCtrl.text.trim();
       final conteudo = _conteudoCtrl.text.trim();
       final areaId = (_selectedAreaId ?? '').trim();
-      final imagem = _imagemCtrl.text.trim();
       final link = _linkCtrl.text.trim();
-      final video = _videoCtrl.text.trim();
       final tags = _csvToList(_tagsCsvCtrl.text);
       final linhas = _selectedLinhas.toList();
+
+      final initialImagemUrlTrim = _initialImagemUrl.trim();
+      final initialVideoUrlTrim = _initialVideoUrl.trim();
+
+      final prevImagemStoragePath = _initialImagemStoragePath;
+      final prevVideoStoragePath = _initialVideoStoragePath;
+
+      String imagemUrl = _imagemCtrl.text.trim();
+      String videoUrl = _videoCtrl.text.trim();
+
+      String? imagemStoragePath = prevImagemStoragePath;
+      String? videoStoragePath = prevVideoStoragePath;
+
+      bool deletePrevImagem = false;
+      bool deletePrevVideo = false;
+
+      if (_removeImagem || imagemUrl.isEmpty) {
+        imagemUrl = '';
+        imagemStoragePath = null;
+        if (prevImagemStoragePath != null) {
+          deletePrevImagem = true;
+        }
+      }
+
+      if (_pickedImagem != null) {
+        final storagePath = StorageMediaService.articleImagePath(
+          artigoId: docRef.id,
+          file: _pickedImagem!,
+        );
+        final upload = await StorageMediaService.uploadPlatformFile(
+          file: _pickedImagem!,
+          storagePath: storagePath,
+        );
+        uploadedNewImagemPath = upload.fullPath;
+        imagemUrl = upload.downloadUrl;
+        imagemStoragePath = upload.fullPath;
+
+        if (prevImagemStoragePath != null && prevImagemStoragePath != imagemStoragePath) {
+          deletePrevImagem = true;
+        }
+      } else if (prevImagemStoragePath != null && imagemUrl != initialImagemUrlTrim) {
+        // URL foi alterada manualmente: não conseguimos garantir que ainda é o mesmo arquivo.
+        imagemStoragePath = null;
+        deletePrevImagem = true;
+      }
+
+      if (_removeVideo || videoUrl.isEmpty) {
+        videoUrl = '';
+        videoStoragePath = null;
+        if (prevVideoStoragePath != null) {
+          deletePrevVideo = true;
+        }
+      }
+
+      if (_pickedVideo != null) {
+        final storagePath = StorageMediaService.articleVideoPath(
+          artigoId: docRef.id,
+          file: _pickedVideo!,
+        );
+        final upload = await StorageMediaService.uploadPlatformFile(
+          file: _pickedVideo!,
+          storagePath: storagePath,
+        );
+        uploadedNewVideoPath = upload.fullPath;
+        videoUrl = upload.downloadUrl;
+        videoStoragePath = upload.fullPath;
+
+        if (prevVideoStoragePath != null && prevVideoStoragePath != videoStoragePath) {
+          deletePrevVideo = true;
+        }
+      } else if (prevVideoStoragePath != null && videoUrl != initialVideoUrlTrim) {
+        videoStoragePath = null;
+        deletePrevVideo = true;
+      }
 
       final isPpg = widget.scopeType == 'ppg';
 
@@ -266,9 +420,11 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
         'conteudo': conteudo,
         'areaId': areaId,
         'categoria': _categoria,
-        'imagem': imagem,
+        'imagem': imagemUrl.isEmpty ? null : imagemUrl,
+        'imagemStoragePath': imagemStoragePath,
         'link': link,
-        'video': video,
+        'video': videoUrl.isEmpty ? null : videoUrl,
+        'videoStoragePath': videoStoragePath,
         'tags': tags,
         'linhasPesquisaIds': linhas,
         'ativo': _ativo,
@@ -279,22 +435,34 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
       };
 
       if (_isEditing) {
-        await widget.artigoRef!.update({
+        await docRef.update({
           ...data,
           // mantém dataPublicacao se existir; se não existir, define agora.
           'dataPublicacao': dataPublicacao ?? Timestamp.now(),
         });
       } else {
-        await FirebaseFirestore.instance.collection('artigos').add({
+        await docRef.set({
           ...data,
           'dataPublicacao': Timestamp.now(),
         });
+      }
+
+      if (deletePrevImagem) {
+        await StorageMediaService.deleteIfExists(prevImagemStoragePath);
+      }
+      if (deletePrevVideo) {
+        await StorageMediaService.deleteIfExists(prevVideoStoragePath);
       }
 
       if (mounted) {
         Navigator.pop(context, true);
       }
     } catch (e) {
+      // Se fez upload mas não salvou no Firestore, evita lixo no Storage.
+      try {
+        await StorageMediaService.deleteIfExists(uploadedNewImagemPath);
+        await StorageMediaService.deleteIfExists(uploadedNewVideoPath);
+      } catch (_) {}
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro ao salvar: $e')),
@@ -307,8 +475,6 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scopeLabel = widget.scopeType == 'ppg' ? 'PPG' : 'Grupo';
-
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
       appBar: AppBar(
@@ -341,21 +507,19 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFFE6E6E6)),
                   ),
-                  child: Text('$scopeLabel (fixo): ${widget.scopeId}'),
+                  
                 ),
                 const SizedBox(height: 12),
 
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Obrigatórios',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 8),
+                
+              
 
                 SwitchListTile(
                   value: _ativo,
+                  // thumb (bolinha) mais escura para contraste
+                  activeColor: const Color(0xFF0F6E58),
+                  // track (trilho) verde mais escuro
+                  activeTrackColor: const Color(0x590F6E58),
                   onChanged: (v) => setState(() => _ativo = v),
                   title: const Text('Ativo'),
                 ),
@@ -545,7 +709,48 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
                     labelText: 'Imagem (URL) (opcional)',
                     border: OutlineInputBorder(),
                   ),
+                  onChanged: (_) {
+                    if (_removeImagem) {
+                      setState(() => _removeImagem = false);
+                    }
+                  },
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _saving ? null : _pickImagem,
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
+                        child: const Text('Upload de imagem', style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _saving
+                          ? null
+                          : () {
+                              setState(() {
+                                _pickedImagem = null;
+                                _removeImagem = true;
+                                _imagemCtrl.clear();
+                              });
+                            },
+                      child: const Text('Remover'),
+                    ),
+                  ],
+                ),
+                if (_pickedImagem != null) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Selecionado: ${_pickedImagem!.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _linkCtrl,
@@ -561,7 +766,48 @@ class _LeaderArticleEditorScreenState extends State<LeaderArticleEditorScreen> {
                     labelText: 'Vídeo (URL) (opcional)',
                     border: OutlineInputBorder(),
                   ),
+                  onChanged: (_) {
+                    if (_removeVideo) {
+                      setState(() => _removeVideo = false);
+                    }
+                  },
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _saving ? null : _pickVideo,
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
+                        child: const Text('Upload de vídeo', style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _saving
+                          ? null
+                          : () {
+                              setState(() {
+                                _pickedVideo = null;
+                                _removeVideo = true;
+                                _videoCtrl.clear();
+                              });
+                            },
+                      child: const Text('Remover'),
+                    ),
+                  ],
+                ),
+                if (_pickedVideo != null) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Selecionado: ${_pickedVideo!.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 20),
                 SizedBox(

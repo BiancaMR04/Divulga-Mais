@@ -79,200 +79,211 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    final topOffset = (screenHeight * 0.22).clamp(120.0, 180.0);
-
     return Scaffold(
       backgroundColor: const Color(0xFF0F6E58),
-      bottomNavigationBar: CustomNavBar(),
+      bottomNavigationBar: CustomNavBar(selected: NavDestination.profile),
       body: Stack(
         children: [
           Positioned.fill(
             child: Image.asset('assets/home.png', fit: BoxFit.cover),
           ),
-          Positioned.fill(
-            top: topOffset,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-              ),
-              child: SingleChildScrollView(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 320),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SizedBox(height: 40),
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Crie sua conta',
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F6E58),
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Crie sua conta',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: FractionallySizedBox(
+                      heightFactor: 0.90,
+                      widthFactor: 1,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(32)),
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return SingleChildScrollView(
+                              padding: const EdgeInsets.all(20),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight),
+                                child: Align(
+                                  alignment: const Alignment(0, -0.30),
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 320),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Crie sua conta',
+                                  style: TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0F6E58),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Form(
-                            key: _formKey,
-                            child: Column(
-                              children: [
-                                TextFormField(
-                                  controller: _nomeCtrl,
-                                  decoration: _fieldDecoration('Nome'),
-                                  validator: (v) => (v == null || v.isEmpty)
-                                      ? 'Digite seu nome'
-                                      : null,
-                                ),
-                                const SizedBox(height: 10),
-                                TextFormField(
-                                  controller: _emailCtrl,
-                                  keyboardType: TextInputType.emailAddress,
-                                  decoration: _fieldDecoration('E-mail'),
-                                  validator: (v) {
-                                    if (v == null || v.trim().isEmpty) {
-                                      return 'Digite seu e-mail';
-                                    }
-                                    if (!v.contains('@')) {
-                                      return 'E-mail inválido';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 10),
-                                DropdownButtonFormField<String>(
-                                  value: _tipoUsuario,
-                                  decoration: _fieldDecoration('Tipo de usuário'),
-                                  items: const [
-                                    DropdownMenuItem(value: 'discente', child: Text('Discente')),
-                                    DropdownMenuItem(value: 'docente', child: Text('Docente')),
-                                    DropdownMenuItem(value: 'tae', child: Text('TAE')),
-                                    DropdownMenuItem(value: 'outros', child: Text('Outros')),
-                                  ],
-                                  onChanged: (v) => setState(() => _tipoUsuario = v),
-                                  validator: (v) => v == null ? 'Selecione o tipo de usuário' : null,
-                                ),
-                                const SizedBox(height: 10),
-                                TextFormField(
-                                  controller: _senhaCtrl,
-                                  obscureText: true,
-                                  decoration: _fieldDecoration('Senha'),
-                                  validator: (v) => (v == null || v.isEmpty)
-                                      ? 'Digite sua senha'
-                                      : null,
-                                ),
-                                const SizedBox(height: 10),
-                                TextFormField(
-                                  controller: _confirmarCtrl,
-                                  obscureText: true,
-                                  decoration: _fieldDecoration('Confirmação de senha'),
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty) {
-                                      return 'Confirme sua senha';
-                                    }
-                                    if (v != _senhaCtrl.text) {
-                                      return 'As senhas não coincidem';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _loading ? null : _register,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF0F6E58),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      elevation: 0,
+                              const SizedBox(height: 20),
+                              Form(
+                                key: _formKey,
+                                child: Column(
+                                  children: [
+                                    TextFormField(
+                                      controller: _nomeCtrl,
+                                      decoration: _fieldDecoration('Nome'),
+                                      validator: (v) => (v == null || v.isEmpty) ? 'Digite seu nome' : null,
                                     ),
-                                    child: _loading
-                                        ? const SizedBox(
-                                            height: 18,
-                                            width: 18,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Text(
-                                            'Cadastrar',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                            ),
+                                    const SizedBox(height: 10),
+                                    TextFormField(
+                                      controller: _emailCtrl,
+                                      keyboardType: TextInputType.emailAddress,
+                                      decoration: _fieldDecoration('E-mail'),
+                                      validator: (v) {
+                                        if (v == null || v.trim().isEmpty) {
+                                          return 'Digite seu e-mail';
+                                        }
+                                        if (!v.contains('@')) {
+                                          return 'E-mail inválido';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 10),
+                                    DropdownButtonFormField<String>(
+                                      value: _tipoUsuario,
+                                      decoration: _fieldDecoration('Tipo de usuário'),
+                                      items: const [
+                                        DropdownMenuItem(value: 'discente', child: Text('Discente')),
+                                        DropdownMenuItem(value: 'docente', child: Text('Docente')),
+                                        DropdownMenuItem(value: 'tae', child: Text('TAE')),
+                                        DropdownMenuItem(value: 'outros', child: Text('Outros')),
+                                      ],
+                                      onChanged: (v) => setState(() => _tipoUsuario = v),
+                                      validator: (v) => v == null ? 'Selecione o tipo de usuário' : null,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextFormField(
+                                      controller: _senhaCtrl,
+                                      obscureText: true,
+                                      decoration: _fieldDecoration('Senha'),
+                                      validator: (v) => (v == null || v.isEmpty) ? 'Digite sua senha' : null,
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextFormField(
+                                      controller: _confirmarCtrl,
+                                      obscureText: true,
+                                      decoration: _fieldDecoration('Confirmação de senha'),
+                                      validator: (v) {
+                                        if (v == null || v.isEmpty) {
+                                          return 'Confirme sua senha';
+                                        }
+                                        if (v != _senhaCtrl.text) {
+                                          return 'As senhas não coincidem';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        onPressed: _loading ? null : _register,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF0F6E58),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF98C8AD),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      elevation: 0,
-                                    ),
-                                    child: const Text(
-                                      'Já tenho conta — Entrar',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                          elevation: 0,
+                                        ),
+                                        child: _loading
+                                            ? const SizedBox(
+                                                height: 18,
+                                                width: 18,
+                                                child: CircularProgressIndicator(
+                                                  color: Colors.white,
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                            : const Text(
+                                                'Cadastrar',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
                                       ),
                                     ),
+                                    const SizedBox(height: 20),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF98C8AD),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          elevation: 0,
+                                        ),
+                                        child: const Text(
+                                          'Já tenho conta — Entrar',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                  ],
+                                ),
+                              ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 24),
-                              ],
-                            ),
-                          ),
-                        ],
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0, vertical: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back,
-                        color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Crie sua conta',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
         ],

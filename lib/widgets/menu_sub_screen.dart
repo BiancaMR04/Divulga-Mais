@@ -269,11 +269,9 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    const double topOffset = 160;
-    // Mantém a barra de pesquisa na mesma altura visual de antes,
-    // mas permite encolher em telas menores.
-    final logoHeight = (screen.height * 0.16).clamp(110.0, 130.0);
-    final logoWidth = (logoHeight * 1.08).clamp(100.0, 160.0);
+    final topSpacing = (screen.height * 0.04).clamp(12.0, 48.0);
+    final logoWidth = (screen.width * 0.30).clamp(90.0, 140.0);
+    final logoHeight = (logoWidth * 0.75).clamp(60.0, 105.0);
 
     final bool mostrarArtigos =
         _termoPesquisa.isNotEmpty || _anoInicial != null || _anoFinal != null;
@@ -287,282 +285,330 @@ class _MenuSubScreenState extends State<MenuSubScreen> {
             Positioned.fill(
               child: Image.asset('assets/home.png', fit: BoxFit.cover),
             ),
-            Positioned.fill(
-              top: topOffset,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF7F7F7),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                ),
-                padding: const EdgeInsets.only(top: 90),
-                child: mostrarArtigos
-                    ? StreamBuilder<QuerySnapshot>(
-                        stream: _artigosQuery().snapshots(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          }
-                          final docs = snapshot.data!.docs;
-                          final termoLower = _termoPesquisa.toLowerCase().trim();
-
-                          final filtered = docs.where((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            return _matchesClientSideFilters(data) &&
-                                _matchesSearch(data, termoLower);
-                          }).toList();
-
-                          if (filtered.isEmpty) {
-                            return const Center(
-                                child: Text("Nenhum artigo encontrado."));
-                          }
-
-                          return ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: filtered.length,
-                            itemBuilder: (context, i) {
-                              final doc = filtered[i];
-                              final data =
-                                  doc.data() as Map<String, dynamic>;
-                              final dataPub = (data['dataPublicacao']
-                                      as Timestamp?)
-                                  ?.toDate();
-
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ArtigoDetalheScreen(artigoId: doc.id),
-                                    ),
-                                  );
-                                },
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                          color: Colors.black12,
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2))
-                                    ],
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(data['titulo'] ?? '',
-                                          style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold)),
-                                      const SizedBox(height: 6),
-                                      Text(data['autor'] ?? '',
-                                          style: const TextStyle(
-                                              color: Colors.grey)),
-                                      const SizedBox(height: 8),
-                                      Text(data['resumo'] ?? '',
-                                          maxLines: 3,
-                                          overflow: TextOverflow.ellipsis,
-                                          style:
-                                              const TextStyle(fontSize: 14)),
-                                      if (dataPub != null)
-                                        Text(
-                                            "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
-                                            style: const TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey)),
-                                    ],
-                                  ),
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: topSpacing),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_back,
+                                color: Colors.white),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          Expanded(
+                            child: FittedBox(
+                              alignment: Alignment.centerLeft,
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                widget.titulo,
+                                maxLines: 1,
+                                softWrap: false,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                    fontSize: 28,
+                                  fontWeight: FontWeight.bold,
                                 ),
+                              ),
+                            ),
+                          ),
+                            const SizedBox(width: 12),
+                          SizedBox(
+                            width: logoWidth,
+                            child: Image.asset(
+                              'assets/logo.png',
+                              height: logoHeight,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF7F7F7),
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(32)),
+                    ),
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isNarrow = constraints.maxWidth < 360;
+                              final fieldHPadding = isNarrow ? 12.0 : 16.0;
+                              final gap = isNarrow ? 8.0 : 12.0;
+                              final filterPadding = isNarrow ? 10.0 : 12.0;
+                              final iconSize = isNarrow ? 20.0 : 24.0;
+
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(minHeight: 48),
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(horizontal: fieldHPadding),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        child: TextField(
+                                          decoration: InputDecoration(
+                                            hintText: "Pesquise artigos...",
+                                            border: InputBorder.none,
+                                            icon: Icon(
+                                              Icons.search,
+                                              size: iconSize,
+                                              color: const Color(0xFF0F6E58),
+                                            ),
+                                          ),
+                                          onChanged: (v) => setState(() => _termoPesquisa = v),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: gap),
+                                  GestureDetector(
+                                    onTap: _abrirFiltroAno,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(minHeight: 48),
+                                      child: Container(
+                                        padding: EdgeInsets.all(filterPadding),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        child: Icon(
+                                          Icons.filter_list,
+                                          size: iconSize,
+                                          color: const Color(0xFF0F6E58),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               );
                             },
-                          );
-                        },
-                      )
-                    : FutureBuilder<QuerySnapshot>(
-                        future: widget.subCollection
-                            .where('ativo', isEqualTo: true)
-                            .orderBy('ordem')
-                            .get(),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          }
+                          ),
+                        ),
+                        Expanded(
+                          child: mostrarArtigos
+                              ? StreamBuilder<QuerySnapshot>(
+                              stream: _artigosQuery().snapshots(),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) {
+                                  return const Center(
+                                      child: CircularProgressIndicator());
+                                }
+                                final docs = snapshot.data!.docs;
+                                final termoLower =
+                                    _termoPesquisa.toLowerCase().trim();
 
-                          final submenus = snapshot.data!.docs;
-                          if (submenus.isEmpty) {
-                            return const Center(
-                                child: Text("Nenhum submenu encontrado."));
-                          }
+                                final filtered = docs.where((doc) {
+                                  final data =
+                                      doc.data() as Map<String, dynamic>;
+                                  return _matchesClientSideFilters(data) &&
+                                      _matchesSearch(data, termoLower);
+                                }).toList();
 
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: GridView.count(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                              childAspectRatio: 1.2,
-                              children:
-                                  List.generate(submenus.length, (index) {
-                                final submenu = submenus[index];
-                                final data =
-                                    submenu.data() as Map<String, dynamic>;
-                                final tipo = data['tipo'] ?? '';
+                                if (filtered.isEmpty) {
+                                  return const Center(
+                                      child: Text("Nenhum artigo encontrado."));
+                                }
 
-                                return MenuCard(
-                                  titulo: data['nome'],
-                                  icone:
-                                      _iconeFromString(data['icone'] ?? ''),
-                                  cor: _corPorIndice(index),
-                                  onTap: () async {
-                                    final temSubmenus = (await submenu.reference
-                                            .collection('submenus')
-                                            .limit(1)
-                                            .get())
-                                        .docs
-                                        .isNotEmpty;
+                                return ListView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: filtered.length,
+                                  itemBuilder: (context, i) {
+                                    final doc = filtered[i];
+                                    final data =
+                                        doc.data() as Map<String, dynamic>;
+                                    final dataPub =
+                                        (data['dataPublicacao'] as Timestamp?)
+                                            ?.toDate();
 
-                                    final novosFiltros = Map<String, String>.from(
-                                        widget.filtros ?? {});
-                                    if (data['campoFiltro'] != null &&
-                                        data['valorFiltro'] != null) {
-                                      novosFiltros[data['campoFiltro']] =
-                                          data['valorFiltro'];
-                                    }
-
-                                    if (tipo == 'submenu' && temSubmenus) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => MenuSubScreen(
-                                            titulo: data['nome'],
-                                            subCollection: submenu.reference
-                                                .collection('submenus'),
-                                            filtros: novosFiltros,
+                                    return GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ArtigoDetalheScreen(
+                                                artigoId: doc.id),
                                           ),
+                                        );
+                                      },
+                                      child: Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 12),
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                                color: Colors.black12,
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2))
+                                          ],
                                         ),
-                                      );
-                                    } else if (tipo == 'artigos') {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ArtigosScreen(
-                                            titulo: data['nome'],
-                                            filtros: novosFiltros,
-                                          ),
-                                      ));  
-                                    } else if (tipo == 'contatos') {
-                                      Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) => ContatosScreen(
-                                                  docRef: submenu.reference)));
-                                    } else if (tipo == 'quemsomos') {
-                                      Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) => QuemSomosScreen(
-                                                  docRef: submenu.reference)));
-                                    } else if (tipo == 'texto') {
-                                      Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (_) => TextoScreen(
-                                                  docRef: submenu.reference)));
-                                    }
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(data['titulo'] ?? '',
+                                                style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                            const SizedBox(height: 6),
+                                            Text(data['autor'] ?? '',
+                                                style: const TextStyle(
+                                                    color: Colors.grey)),
+                                            const SizedBox(height: 8),
+                                            Text(data['resumo'] ?? '',
+                                                maxLines: 3,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    fontSize: 14)),
+                                            if (dataPub != null)
+                                              Text(
+                                                  "Publicado em ${dataPub.day}/${dataPub.month}/${dataPub.year}",
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.grey)),
+                                          ],
+                                        ),
+                                      ),
+                                    );
                                   },
                                 );
-                              }),
+                              },
+                            )
+                              : FutureBuilder<QuerySnapshot>(
+                              future: widget.subCollection
+                                  .where('ativo', isEqualTo: true)
+                                  .orderBy('ordem')
+                                  .get(),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) {
+                                  return const Center(
+                                      child: CircularProgressIndicator());
+                                }
+
+                                final submenus = snapshot.data!.docs;
+                                if (submenus.isEmpty) {
+                                  return const Center(
+                                      child: Text("Nenhum submenu encontrado."));
+                                }
+
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                                  child: GridView.count(
+                                    crossAxisCount: 2,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                    childAspectRatio: 1.2,
+                                    children: List.generate(submenus.length,
+                                        (index) {
+                                      final submenu = submenus[index];
+                                      final data = submenu.data()
+                                          as Map<String, dynamic>;
+                                      final tipo = data['tipo'] ?? '';
+
+                                      return MenuCard(
+                                        titulo: data['nome'],
+                                        icone: _iconeFromString(
+                                            data['icone'] ?? ''),
+                                        cor: _corPorIndice(index),
+                                        onTap: () async {
+                                          final temSubmenus = (await submenu
+                                                  .reference
+                                                  .collection('submenus')
+                                                  .limit(1)
+                                                  .get())
+                                              .docs
+                                              .isNotEmpty;
+
+                                          final novosFiltros =
+                                              Map<String, String>.from(
+                                                  widget.filtros ?? {});
+                                          if (data['campoFiltro'] != null &&
+                                              data['valorFiltro'] != null) {
+                                            novosFiltros[data['campoFiltro']] =
+                                                data['valorFiltro'];
+                                          }
+
+                                          if (tipo == 'submenu' && temSubmenus) {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => MenuSubScreen(
+                                                  titulo: data['nome'],
+                                                  subCollection: submenu
+                                                      .reference
+                                                      .collection('submenus'),
+                                                  filtros: novosFiltros,
+                                                ),
+                                              ),
+                                            );
+                                          } else if (tipo == 'artigos') {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => ArtigosScreen(
+                                                  titulo: data['nome'],
+                                                  filtros: novosFiltros,
+                                                ),
+                                              ),
+                                            );
+                                          } else if (tipo == 'contatos') {
+                                            Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        ContatosScreen(
+                                                            docRef: submenu
+                                                                .reference)));
+                                          } else if (tipo == 'quemsomos') {
+                                            Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        QuemSomosScreen(
+                                                            docRef: submenu
+                                                                .reference)));
+                                          } else if (tipo == 'texto') {
+                                            Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                    builder: (_) => TextoScreen(
+                                                        docRef: submenu
+                                                            .reference)));
+                                          }
+                                        },
+                                      );
+                                    }),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 40),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon:
-                            const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      Expanded(
-                        child: FittedBox(
-                          alignment: Alignment.centerLeft,
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            widget.titulo,
-                            maxLines: 1,
-                            softWrap: false,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8), // espaço entre texto e logo
-                      SizedBox(
-                        width: logoWidth,
-                        child: Image.asset(
-                          'assets/logo.png',
-                          height: logoHeight,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              hintText: "Pesquise artigos...",
-                              border: InputBorder.none,
-                              icon: Icon(Icons.search,
-                                  color: Color(0xFF0F6E58)),
-                            ),
-                            onChanged: (v) =>
-                                setState(() => _termoPesquisa = v),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: _abrirFiltroAno,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(Icons.filter_list,
-                              color: Color(0xFF0F6E58)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ],
         ),

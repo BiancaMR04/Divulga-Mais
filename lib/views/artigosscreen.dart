@@ -370,36 +370,62 @@ class _ArtigosScreenState extends State<ArtigosScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: TextField(
-                            decoration: const InputDecoration(
-                              hintText: 'Pesquise artigos...',
-                              border: InputBorder.none,
-                              icon: Icon(Icons.search,
-                                  color: Color(0xFF0F6E58)),
-                            ),
-                            onChanged: (v) =>
-                                setState(() => _termoPesquisa = v),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      GestureDetector(
-                        onTap: _abrirFiltroAno,
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(Icons.filter_list,
-                              color: Color(0xFF0F6E58)),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isNarrow = constraints.maxWidth < 300;
+                            final fieldHPadding = isNarrow ? 12.0 : 16.0;
+                            final gap = isNarrow ? 8.0 : 12.0;
+                            final filterPadding = isNarrow ? 10.0 : 12.0;
+                            final iconSize = isNarrow ? 20.0 : 24.0;
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(minHeight: 48),
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(horizontal: fieldHPadding),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: TextField(
+                                        decoration: InputDecoration(
+                                          hintText: 'Pesquise artigos...',
+                                          border: InputBorder.none,
+                                          icon: Icon(
+                                            Icons.search,
+                                            size: iconSize,
+                                            color: const Color(0xFF0F6E58),
+                                          ),
+                                        ),
+                                        onChanged: (v) => setState(() => _termoPesquisa = v),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: gap),
+                                GestureDetector(
+                                  onTap: _abrirFiltroAno,
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(minHeight: 48),
+                                    child: Container(
+                                      padding: EdgeInsets.all(filterPadding),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        Icons.filter_list,
+                                        size: iconSize,
+                                        color: const Color(0xFF0F6E58),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ],

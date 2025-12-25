@@ -1,7 +1,7 @@
 name: divulgapampa
 description: "A new Flutter project."
 publish_to: 'none'
-version: 0.3.0
+version: 0.6.0
 
 environment:
   sdk: ^3.8.1
@@ -13,6 +13,7 @@ dependencies:
   firebase_auth: ^5.7.0
   cloud_firestore: ^5.6.12
   firebase_storage: ^12.4.10
+  file_picker: ^8.3.2
   provider: ^6.1.5
   phosphor_flutter: ^2.1.0
   url_launcher: ^6.3.2

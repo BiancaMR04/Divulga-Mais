@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'package:divulgapampa/services/storage_media_service.dart';
+import 'package:divulgapampa/widgets/custom_navbar.dart';
 import 'package:divulgapampa/widgets/guards/superuser_gate.dart';
 
 class AdminMenusScreen extends StatelessWidget {
@@ -60,10 +63,6 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     return widget.collection ?? FirebaseFirestore.instance.collection('menus');
   }
 
-  bool get _isRootMenusContext {
-    return widget.collection == null;
-  }
-
   bool get _isGruposDePesquisaContext {
     final t = widget.title.toLowerCase();
     return t.contains('grupos de pesquisa');
@@ -74,288 +73,59 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     return t.contains('áreas') || t.contains('areas');
   }
 
-  Future<void> _migrateEditaisNoticiasCategoria(BuildContext context) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Migrar “Editais e notícias”'),
-        content: const Text(
-          'Isso vai atualizar automaticamente todos os submenus “Editais e notícias” dentro de PPGs e Grupos de Pesquisa para filtrar por categoria (categoria = editais_noticias).\n\nUse isso se esses submenus foram criados antes da nova classificação.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Migrar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (ok != true) return;
-
-    int updated = 0;
-    int scanned = 0;
-
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        title: Text('Migrando…'),
-        content: SizedBox(
-          height: 90,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ),
-    );
-
-    try {
-      final menusRef = FirebaseFirestore.instance.collection('menus');
-      final menusSnap = await menusRef.get();
-
-      DocumentSnapshot<Map<String, dynamic>>? findRoot(List<String> keywords) {
-        for (final d in menusSnap.docs) {
-          final nome = (d.data()['nome'] ?? '').toString().trim().toLowerCase();
-          if (nome.isEmpty) continue;
-          if (keywords.any(nome.contains)) return d;
-        }
-        return null;
-      }
-
-      final ppgRoot = findRoot(<String>[
-        'programas de pós-graduação',
-        'pós-graduação',
-        'pos-graduacao',
-        'ppgs',
-        'ppg',
-      ]);
-
-      final gruposRoot = findRoot(<String>[
-        'grupos de pesquisa',
-        'grupo de pesquisa',
-        'grupos',
-        'grupo',
-      ]);
-
-      final roots = <DocumentReference<Map<String, dynamic>>>[];
-      if (ppgRoot != null) roots.add(ppgRoot.reference);
-      if (gruposRoot != null) roots.add(gruposRoot.reference);
-
-      final firestore = FirebaseFirestore.instance;
-      WriteBatch batch = firestore.batch();
-      int batchCount = 0;
-
-      Future<void> flushBatch() async {
-        if (batchCount == 0) return;
-        await batch.commit();
-        batch = firestore.batch();
-        batchCount = 0;
-      }
-
-      void queueUpdate(DocumentReference<Map<String, dynamic>> ref) {
-        batch.update(ref, {
-          'campoFiltro': 'categoria',
-          'valorFiltro': 'editais_noticias',
-        });
-        batchCount += 1;
-      }
-
-      bool isTarget(Map<String, dynamic> data) {
-        final tipo = (data['tipo'] ?? '').toString().trim().toLowerCase();
-        if (tipo != 'artigos') return false;
-
-        final nome = (data['nome'] ?? '').toString().trim().toLowerCase();
-        final hasEditais = nome.contains('editais');
-        final hasNoticias = nome.contains('noticias') || nome.contains('notícias') || nome.contains('noticia') || nome.contains('notícia');
-        if (!(hasEditais && hasNoticias)) return false;
-
-        final cf = (data['campoFiltro'] ?? '').toString().trim();
-        final vf = (data['valorFiltro'] ?? '').toString().trim();
-        if (cf == 'categoria' && vf == 'editais_noticias') return false;
-        return true;
-      }
-
-      Future<void> walk(DocumentReference<Map<String, dynamic>> ref) async {
-        final sub = await ref.collection('submenus').get();
-        for (final d in sub.docs) {
-          scanned += 1;
-          final data = d.data();
-          if (isTarget(data)) {
-            queueUpdate(d.reference);
-            updated += 1;
-            if (batchCount >= 400) {
-              await flushBatch();
-            }
-          }
-          await walk(d.reference);
-        }
-      }
-
-      for (final root in roots) {
-        final scopes = await root.collection('submenus').get();
-        for (final scope in scopes.docs) {
-          await walk(scope.reference);
-        }
-      }
-
-      await flushBatch();
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro na migração: $e')),
-        );
-      }
-      return;
-    }
-
-    if (context.mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Migração concluída: $updated atualizado(s), $scanned verificado(s).')),
-      );
-    }
-  }
-
-  Future<int> _nextOrderFor(CollectionReference<Map<String, dynamic>> col) async {
-    final snap = await col.get();
-    var maxOrder = 0;
-    for (final d in snap.docs) {
-      final ordem = _safeOrderOf(d.data());
-      if (ordem != (1 << 30) && ordem > maxOrder) {
-        maxOrder = ordem;
-      }
-    }
-    return maxOrder + 1;
-  }
-
-  Future<void> _duplicateWithChildren(
-    BuildContext context,
-    DocumentReference<Map<String, dynamic>> sourceRef,
-    Map<String, dynamic> sourceData,
-  ) async {
-    final nomeAtual = (sourceData['nome'] ?? '').toString();
-    final nomeCtrl = TextEditingController(text: nomeAtual);
-    final campoFiltro = (sourceData['campoFiltro'] ?? '').toString();
-    final valorFiltro = (sourceData['valorFiltro'] ?? '').toString();
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Duplicar (com submenus)'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nomeCtrl,
-                decoration: const InputDecoration(labelText: 'Nome do novo item'),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'A duplicação copia toda a estrutura de submenus.\n\nSe este item usa filtro por ID (ex: valorFiltro = id do PPG), o app vai atualizar automaticamente para o ID novo para não misturar os artigos.',
-                style: TextStyle(color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Duplicar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (ok != true) return;
-
-    final newNome = nomeCtrl.text.trim();
-    if (newNome.isEmpty) return;
-
-    final nextOrder = await _nextOrderFor(_col);
-    final newData = Map<String, dynamic>.from(sourceData);
-    newData['nome'] = newNome;
-    newData['ordem'] = nextOrder;
-
-    // Se o filtro do item de origem estiver amarrado ao ID do próprio doc,
-    // reescrevemos para o ID novo após criar o doc (abaixo).
-    // Caso contrário, mantemos como estava (slug/manual).
-    newData['campoFiltro'] = campoFiltro.isEmpty ? null : campoFiltro;
-    newData['valorFiltro'] = valorFiltro.isEmpty ? null : valorFiltro;
-
-    final newRef = await _col.add(newData);
-
-    final shouldRewriteIdBasedFilter =
-        valorFiltro == sourceRef.id ||
-        campoFiltro == 'ppgId' ||
-        campoFiltro == 'ppgIds' ||
-        campoFiltro == 'grupoPesquisaId' ||
-        campoFiltro == 'grupoPesquisaIds';
-    if (shouldRewriteIdBasedFilter) {
-      await newRef.update({'valorFiltro': newRef.id});
-    }
-
-    Future<void> copyChildren(
-      DocumentReference<Map<String, dynamic>> fromRef,
-      DocumentReference<Map<String, dynamic>> toRef,
-      String oldRootId,
-      String newRootId,
-    ) async {
-      final childrenSnap = await fromRef.collection('submenus').get();
-      final children = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(childrenSnap.docs);
-      children.sort((a, b) {
-        final ao = _safeOrderOf(a.data());
-        final bo = _safeOrderOf(b.data());
-        return ao.compareTo(bo);
-      });
-
-      for (final child in children) {
-        final childData = Map<String, dynamic>.from(child.data());
-
-        // Se algum filho também estiver apontando para o ID antigo, atualiza.
-        final childValor = (childData['valorFiltro'] ?? '').toString();
-        if (childValor == oldRootId) {
-          childData['valorFiltro'] = newRootId;
-        }
-
-        // Preserve child order as-is
-        final newChildRef = await toRef.collection('submenus').add(childData);
-        await copyChildren(child.reference, newChildRef, oldRootId, newRootId);
-      }
-    }
-
-    await copyChildren(sourceRef, newRef, sourceRef.id, newRef.id);
+  bool get _isPpgsContext {
+    final t = widget.title.toLowerCase();
+    return t.contains('ppg') ||
+        t.contains('pós-graduação') ||
+        t.contains('pos-graduacao') ||
+        t.contains('programas de pós-graduação') ||
+        t.contains('programas de pos-graduacao');
   }
 
   Future<void> _createGrupoModelo(BuildContext context) async {
     final nomeCtrl = TextEditingController(text: 'Novo grupo');
+    String? nomeErro;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Criar grupo (modelo tipo PPG)'),
-        content: TextField(
-          controller: nomeCtrl,
-          decoration: const InputDecoration(labelText: 'Nome do grupo'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Criar', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Criar grupo (modelo tipo PPG)'),
+              content: TextField(
+                controller: nomeCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Nome do grupo',
+                  errorText: nomeErro,
+                ),
+                onChanged: (_) {
+                  if (nomeErro != null) {
+                    setDialogState(() => nomeErro = null);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
+                  onPressed: () {
+                    final nome = nomeCtrl.text.trim();
+                    if (nome.isEmpty) {
+                      setDialogState(() => nomeErro = 'Informe o nome do grupo.');
+                      return;
+                    }
+                    Navigator.pop(dialogCtx, true);
+                  },
+                  child: const Text('Criar', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
     if (ok != true) return;
 
@@ -570,6 +340,10 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     final normalizedNome = nome.trim().toLowerCase();
     final bool isContatos = normalizedTipo == 'contatos' || normalizedNome == 'contatos';
 
+    final bool allowMediaUpload = normalizedNome.contains('sobre o app') ||
+      normalizedNome.contains('sobre a unipampa') ||
+      normalizedNome.contains('sobre unipampa');
+
     final descCtrl = TextEditingController(
       text: (existing['descricao'] ?? '').toString(),
     );
@@ -602,82 +376,289 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
       imagemCtrl = TextEditingController(text: (existing['imagem'] ?? '').toString());
     }
 
+    TextEditingController? videoCtrl;
+    if (imagemCtrl != null && allowMediaUpload) {
+      videoCtrl = TextEditingController(text: (existing['video'] ?? '').toString());
+    }
+
+    final initialImagemUrlTrim = (existing['imagem'] ?? '').toString().trim();
+    final initialVideoUrlTrim = (existing['video'] ?? '').toString().trim();
+    final initialImagemStoragePath = (existing['imagemStoragePath'] ?? '').toString().trim();
+    final initialVideoStoragePath = (existing['videoStoragePath'] ?? '').toString().trim();
+
+    PlatformFile? pickedImagem;
+    PlatformFile? pickedVideo;
+    bool removeImagem = false;
+    bool removeVideo = false;
+
+    String? descErro;
+    String? contatosErro;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: Text(nome.isEmpty ? 'Editar conteúdo' : 'Editar conteúdo: $nome'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!isContatos)
-                  TextField(
-                    controller: descCtrl,
-                    maxLines: 10,
-                    decoration: const InputDecoration(
-                      labelText: 'Texto/descrição',
-                      alignLabelWithHint: true,
-                    ),
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: Text(nome.isEmpty ? 'Editar conteúdo' : 'Editar conteúdo: $nome'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!isContatos)
+                      TextField(
+                        controller: descCtrl,
+                        maxLines: 10,
+                        decoration: InputDecoration(
+                          labelText: 'Texto/descrição',
+                          alignLabelWithHint: true,
+                          errorText: descErro,
+                        ),
+                        onChanged: (_) {
+                          if (descErro != null) {
+                            setDialogState(() => descErro = null);
+                          }
+                        },
+                      ),
+                    if (isContatos) ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: telefonesCtrl,
+                        maxLines: 6,
+                        decoration: const InputDecoration(
+                          labelText: 'Telefones (1 por linha)',
+                          alignLabelWithHint: true,
+                        ),
+                        onChanged: (_) {
+                          if (contatosErro != null) {
+                            setDialogState(() => contatosErro = null);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: emailsCtrl,
+                        maxLines: 6,
+                        decoration: const InputDecoration(
+                          labelText: 'E-mails (1 por linha)',
+                          alignLabelWithHint: true,
+                        ),
+                        onChanged: (_) {
+                          if (contatosErro != null) {
+                            setDialogState(() => contatosErro = null);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: redesCtrl,
+                        maxLines: 8,
+                        decoration: InputDecoration(
+                          labelText: 'Redes (1 por linha: nome=url)',
+                          hintText:
+                              'instagram=https://instagram.com/...\nfacebook=https://facebook.com/...',
+                          alignLabelWithHint: true,
+                          // Mensagem do grupo de contatos aparece embaixo deste campo
+                          errorText: contatosErro,
+                        ),
+                        onChanged: (_) {
+                          if (contatosErro != null) {
+                            setDialogState(() => contatosErro = null);
+                          }
+                        },
+                      ),
+                    ],
+                    if (imagemCtrl != null) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: imagemCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Imagem (URL opcional)',
+                        ),
+                        onChanged: (_) {
+                          if (removeImagem) {
+                            setDialogState(() => removeImagem = false);
+                          }
+                        },
+                      ),
+                      if (allowMediaUpload) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F6E58),
+                                ),
+                                onPressed: () async {
+                                  try {
+                                    final file = await StorageMediaService.pickImage();
+                                    if (file == null) return;
+                                    if (file.size > StorageMediaService.maxBytes) {
+                                      if (ctx.mounted) {
+                                        ScaffoldMessenger.of(ctx).showSnackBar(
+                                          const SnackBar(content: Text('Arquivo excede o limite de 100MB.')),
+                                        );
+                                      }
+                                      return;
+                                    }
+                                    setDialogState(() {
+                                      pickedImagem = file;
+                                      removeImagem = false;
+                                    });
+                                  } catch (e) {
+                                    if (ctx.mounted) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        SnackBar(content: Text('Erro ao selecionar imagem: $e')),
+                                      );
+                                    }
+                                  }
+                                },
+                                child: const Text('Upload de imagem', style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton(
+                              onPressed: () {
+                                setDialogState(() {
+                                  pickedImagem = null;
+                                  removeImagem = true;
+                                  imagemCtrl?.clear();
+                                });
+                              },
+                              child: const Text('Remover'),
+                            ),
+                          ],
+                        ),
+                        if (pickedImagem != null) ...[
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Selecionado: ${pickedImagem!.name}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ],
+
+                    if (videoCtrl != null) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: videoCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Vídeo (URL opcional)',
+                        ),
+                        onChanged: (_) {
+                          if (removeVideo) {
+                            setDialogState(() => removeVideo = false);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F6E58),
+                              ),
+                              onPressed: () async {
+                                try {
+                                  final file = await StorageMediaService.pickVideo();
+                                  if (file == null) return;
+                                  if (file.size > StorageMediaService.maxBytes) {
+                                    if (ctx.mounted) {
+                                      ScaffoldMessenger.of(ctx).showSnackBar(
+                                        const SnackBar(content: Text('Arquivo excede o limite de 100MB.')),
+                                      );
+                                    }
+                                    return;
+                                  }
+                                  setDialogState(() {
+                                    pickedVideo = file;
+                                    removeVideo = false;
+                                  });
+                                } catch (e) {
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(content: Text('Erro ao selecionar vídeo: $e')),
+                                    );
+                                  }
+                                }
+                              },
+                              child: const Text('Upload de vídeo', style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () {
+                              setDialogState(() {
+                                pickedVideo = null;
+                                removeVideo = true;
+                                videoCtrl?.clear();
+                              });
+                            },
+                            child: const Text('Remover'),
+                          ),
+                        ],
+                      ),
+                      if (pickedVideo != null) ...[
+                        const SizedBox(height: 6),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Selecionado: ${pickedVideo!.name}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F6E58),
                   ),
-                if (isContatos) ...[
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: telefonesCtrl,
-                    maxLines: 6,
-                    decoration: const InputDecoration(
-                      labelText: 'Telefones (1 por linha)',
-                      alignLabelWithHint: true,
-                    ),
+                  onPressed: () {
+                    if (!isContatos) {
+                      final descricao = descCtrl.text.trim();
+                      if (descricao.isEmpty) {
+                        setDialogState(() => descErro = 'O texto/descrição é obrigatório.');
+                        return;
+                      }
+                    } else {
+                      final telefones = (telefonesCtrl?.text ?? '').trim();
+                      final emails = (emailsCtrl?.text ?? '').trim();
+                      final redes = (redesCtrl?.text ?? '').trim();
+                      final hasAny = telefones.isNotEmpty || emails.isNotEmpty || redes.isNotEmpty;
+                      if (!hasAny) {
+                        setDialogState(
+                          () => contatosErro =
+                              'Informe pelo menos 1 contato (telefone, e-mail ou rede).',
+                        );
+                        return;
+                      }
+                    }
+                    Navigator.pop(ctx, true);
+                  },
+                  child: const Text(
+                    'Salvar',
+                    style: TextStyle(color: Colors.white),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: emailsCtrl,
-                    maxLines: 6,
-                    decoration: const InputDecoration(
-                      labelText: 'E-mails (1 por linha)',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: redesCtrl,
-                    maxLines: 8,
-                    decoration: const InputDecoration(
-                      labelText: 'Redes (1 por linha: nome=url)',
-                      hintText: 'instagram=https://instagram.com/...\nfacebook=https://facebook.com/...',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                ],
-                if (imagemCtrl != null) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: imagemCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Imagem (URL opcional)',
-                    ),
-                  ),
-                ],
+                ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F6E58),
-              ),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text(
-                'Salvar',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -685,7 +666,17 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     if (ok != true) return;
 
     final descricao = descCtrl.text.trim();
-    final imagem = imagemCtrl?.text.trim();
+
+    String? uploadedNewImagemPath;
+    String? uploadedNewVideoPath;
+    bool deletePrevImagem = false;
+    bool deletePrevVideo = false;
+
+    String imagemUrl = (imagemCtrl?.text ?? '').trim();
+    String videoUrl = (videoCtrl?.text ?? '').trim();
+
+    String? imagemStoragePath = initialImagemStoragePath.isEmpty ? null : initialImagemStoragePath;
+    String? videoStoragePath = initialVideoStoragePath.isEmpty ? null : initialVideoStoragePath;
 
     final telefones = telefonesCtrl == null
         ? null
@@ -693,13 +684,103 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     final emails = emailsCtrl == null ? null : _parseLinesToList(emailsCtrl.text);
     final redes = redesCtrl == null ? null : _parseRedesTextToMap(redesCtrl.text);
 
-    await docRef.update({
+    final updates = <String, dynamic>{
       if (!isContatos) 'descricao': descricao.isEmpty ? null : descricao,
-      if (imagemCtrl != null) 'imagem': (imagem == null || imagem.isEmpty) ? null : imagem,
       if (isContatos) 'telefones': telefones ?? <String>[],
       if (isContatos) 'emails': emails ?? <String>[],
       if (isContatos) 'redes': redes ?? <String, String>{},
-    });
+    };
+
+    if (imagemCtrl != null && allowMediaUpload) {
+      if (removeImagem || imagemUrl.isEmpty) {
+        imagemUrl = '';
+        imagemStoragePath = null;
+        if (initialImagemStoragePath.isNotEmpty) {
+          deletePrevImagem = true;
+        }
+      }
+
+      if (pickedImagem != null) {
+        final storagePath = StorageMediaService.contentImagePath(
+          docPath: docRef.path,
+          file: pickedImagem!,
+        );
+        final upload = await StorageMediaService.uploadPlatformFile(
+          file: pickedImagem!,
+          storagePath: storagePath,
+        );
+        uploadedNewImagemPath = upload.fullPath;
+        imagemUrl = upload.downloadUrl;
+        imagemStoragePath = upload.fullPath;
+        if (initialImagemStoragePath.isNotEmpty && initialImagemStoragePath != imagemStoragePath) {
+          deletePrevImagem = true;
+        }
+      } else if (initialImagemStoragePath.isNotEmpty && imagemUrl != initialImagemUrlTrim) {
+        imagemStoragePath = null;
+        deletePrevImagem = true;
+      }
+
+      if (removeVideo || videoUrl.isEmpty) {
+        videoUrl = '';
+        videoStoragePath = null;
+        if (initialVideoStoragePath.isNotEmpty) {
+          deletePrevVideo = true;
+        }
+      }
+
+      if (pickedVideo != null) {
+        final storagePath = StorageMediaService.contentVideoPath(
+          docPath: docRef.path,
+          file: pickedVideo!,
+        );
+        final upload = await StorageMediaService.uploadPlatformFile(
+          file: pickedVideo!,
+          storagePath: storagePath,
+        );
+        uploadedNewVideoPath = upload.fullPath;
+        videoUrl = upload.downloadUrl;
+        videoStoragePath = upload.fullPath;
+        if (initialVideoStoragePath.isNotEmpty && initialVideoStoragePath != videoStoragePath) {
+          deletePrevVideo = true;
+        }
+      } else if (initialVideoStoragePath.isNotEmpty && videoUrl != initialVideoUrlTrim) {
+        videoStoragePath = null;
+        deletePrevVideo = true;
+      }
+
+      updates['imagem'] = imagemUrl.isEmpty ? null : imagemUrl;
+      updates['imagemStoragePath'] = imagemStoragePath;
+      updates['video'] = videoUrl.isEmpty ? null : videoUrl;
+      updates['videoStoragePath'] = videoStoragePath;
+    } else if (imagemCtrl != null) {
+      final imagem = imagemCtrl.text.trim();
+      updates['imagem'] = imagem.isEmpty ? null : imagem;
+    }
+
+    try {
+      await docRef.update(updates);
+
+      if (allowMediaUpload) {
+        if (deletePrevImagem) {
+          await StorageMediaService.deleteIfExists(initialImagemStoragePath);
+        }
+        if (deletePrevVideo) {
+          await StorageMediaService.deleteIfExists(initialVideoStoragePath);
+        }
+      }
+    } catch (e) {
+      // Se fez upload mas não conseguiu salvar no Firestore, evita lixo no Storage.
+      try {
+        await StorageMediaService.deleteIfExists(uploadedNewImagemPath);
+        await StorageMediaService.deleteIfExists(uploadedNewVideoPath);
+      } catch (_) {}
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao salvar conteúdo: $e')),
+        );
+      }
+      return;
+    }
   }
 
   int _safeOrderOf(Map<String, dynamic> data) {
@@ -707,6 +788,141 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     if (v is int) return v;
     if (v is num) return v.toInt();
     return 1 << 30; // sem ordem vai para o fim
+  }
+
+  Future<int> _nextOrderFor(CollectionReference<Map<String, dynamic>> col) async {
+    final snap = await col.get();
+    var maxOrder = 0;
+    for (final d in snap.docs) {
+      final data = d.data();
+      final v = data['ordem'];
+      int? order;
+      if (v is int) {
+        order = v;
+      } else if (v is num) {
+        order = v.toInt();
+      }
+      if (order != null && order > maxOrder) {
+        maxOrder = order;
+      }
+    }
+    return maxOrder + 1;
+  }
+
+  Future<void> _duplicateWithChildren(
+    BuildContext context,
+    DocumentReference<Map<String, dynamic>> sourceRef,
+    Map<String, dynamic> sourceData,
+  ) async {
+    final nomeCtrl = TextEditingController(
+      text: ((sourceData['nome'] ?? '').toString().trim().isEmpty)
+          ? 'Cópia'
+          : '${(sourceData['nome'] ?? '').toString().trim()} (cópia)',
+    );
+
+    String? nomeErro;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Duplicar item'),
+              content: TextField(
+                controller: nomeCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Nome do novo item',
+                  errorText: nomeErro,
+                ),
+                onChanged: (_) {
+                  if (nomeErro != null) {
+                    setDialogState(() => nomeErro = null);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
+                  onPressed: () {
+                    final newNome = nomeCtrl.text.trim();
+                    if (newNome.isEmpty) {
+                      setDialogState(() => nomeErro = 'Informe o nome do novo item.');
+                      return;
+                    }
+                    Navigator.pop(dialogCtx, true);
+                  },
+                  child: const Text('Duplicar', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    final newNome = nomeCtrl.text.trim();
+    if (newNome.isEmpty) return;
+
+    final campoFiltro = (sourceData['campoFiltro'] ?? '').toString().trim();
+    final valorFiltro = (sourceData['valorFiltro'] ?? '').toString().trim();
+
+    final nextOrder = await _nextOrderFor(_col);
+    final newData = Map<String, dynamic>.from(sourceData);
+    newData['nome'] = newNome;
+    newData['ordem'] = nextOrder;
+
+    // Mantém os filtros como estavam; se forem baseados no ID do doc, reescreve abaixo.
+    newData['campoFiltro'] = campoFiltro.isEmpty ? null : campoFiltro;
+    newData['valorFiltro'] = valorFiltro.isEmpty ? null : valorFiltro;
+
+    final newRef = await _col.add(newData);
+
+    final shouldRewriteIdBasedFilter =
+        valorFiltro == sourceRef.id ||
+        campoFiltro == 'ppgId' ||
+        campoFiltro == 'ppgIds' ||
+        campoFiltro == 'grupoPesquisaId' ||
+        campoFiltro == 'grupoPesquisaIds' ||
+        campoFiltro == 'areaId' ||
+        campoFiltro == 'areasIds';
+    if (shouldRewriteIdBasedFilter) {
+      await newRef.update({'valorFiltro': newRef.id});
+    }
+
+    Future<void> copyChildren(
+      DocumentReference<Map<String, dynamic>> fromRef,
+      DocumentReference<Map<String, dynamic>> toRef,
+      String oldRootId,
+      String newRootId,
+    ) async {
+      final childrenSnap = await fromRef.collection('submenus').get();
+      final children = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(childrenSnap.docs);
+      children.sort((a, b) {
+        final ao = _safeOrderOf(a.data());
+        final bo = _safeOrderOf(b.data());
+        return ao.compareTo(bo);
+      });
+
+      for (final child in children) {
+        final childData = Map<String, dynamic>.from(child.data());
+        final childValor = (childData['valorFiltro'] ?? '').toString();
+        if (childValor == oldRootId) {
+          childData['valorFiltro'] = newRootId;
+        }
+
+        final newChildRef = await toRef.collection('submenus').add(childData);
+        await copyChildren(child.reference, newChildRef, oldRootId, newRootId);
+      }
+    }
+
+    await copyChildren(sourceRef, newRef, sourceRef.id, newRef.id);
   }
 
   Future<void> _createOrEdit({
@@ -718,14 +934,9 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     final nomeCtrl = TextEditingController(
       text: (existing?['nome'] ?? '').toString(),
     );
+    String? nomeErro;
     final iconeCtrl = TextEditingController(
       text: (existing?['icone'] ?? '').toString(),
-    );
-    final campoFiltroCtrl = TextEditingController(
-      text: (existing?['campoFiltro'] ?? '').toString(),
-    );
-    final valorFiltroCtrl = TextEditingController(
-      text: (existing?['valorFiltro'] ?? '').toString(),
     );
     final corCtrl = TextEditingController(
       text: (existing?['cor'] ?? '').toString(),
@@ -736,9 +947,9 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) {
+      builder: (dialogCtx) {
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogCtx, setDialogState) {
             return AlertDialog(
               title: Text(docRef == null ? 'Novo item' : 'Editar item'),
               content: SingleChildScrollView(
@@ -747,7 +958,15 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
                   children: [
                     TextField(
                       controller: nomeCtrl,
-                      decoration: const InputDecoration(labelText: 'Nome'),
+                      decoration: InputDecoration(
+                        labelText: 'Nome',
+                        errorText: nomeErro,
+                      ),
+                      onChanged: (_) {
+                        if (nomeErro != null) {
+                          setDialogState(() => nomeErro = null);
+                        }
+                      },
                     ),
                     const SizedBox(height: 8),
                     if (isAreas)
@@ -804,45 +1023,33 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       value: ativo,
+                      activeColor: const Color(0xFF0F6E58),
+                      activeTrackColor: const Color(0x590F6E58),
                       title: const Text('Ativo'),
                       onChanged: (v) {
                         setDialogState(() => ativo = v);
                       },
                     ),
-                    const SizedBox(height: 8),
-                    if (isAreas) ...[
-                      const Text(
-                        'Filtros (automático):\n- campoFiltro = areaId\n- valorFiltro = ID da área criada',
-                        style: TextStyle(color: Colors.black54),
-                      ),
-                    ] else ...[
-                      TextField(
-                        controller: campoFiltroCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'campoFiltro (ex: ppgIds)',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: valorFiltroCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'valorFiltro (ex: ppg_bioquimica)',
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => Navigator.pop(dialogCtx, false),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0F6E58),
                   ),
-                  onPressed: () => Navigator.pop(context, true),
+                  onPressed: () {
+                    final nome = nomeCtrl.text.trim();
+                    if (nome.isEmpty) {
+                      setDialogState(() => nomeErro = 'O campo Nome é obrigatório.');
+                      return;
+                    }
+                    Navigator.pop(dialogCtx, true);
+                  },
                   child: const Text(
                     'Salvar',
                     style: TextStyle(color: Colors.white),
@@ -860,28 +1067,32 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
     final nome = nomeCtrl.text.trim();
     if (nome.isEmpty) return;
 
+    final isNew = docRef == null;
+    final shouldAutoFilter = isNew && (isAreas || _isPpgsContext || _isGruposDePesquisaContext);
+    final String? autoCampoFiltro = !shouldAutoFilter
+        ? null
+        : (isAreas
+            ? 'areaId'
+            : (_isGruposDePesquisaContext ? 'grupoPesquisaIds' : 'ppgIds'));
+
     final data = <String, dynamic>{
       'nome': nome,
       'tipo': isAreas ? 'artigos' : tipo,
       'icone': iconeCtrl.text.trim(),
       'ativo': ativo,
-      'campoFiltro': isAreas
-        ? 'areaId'
-        : (campoFiltroCtrl.text.trim().isEmpty
-          ? null
-          : campoFiltroCtrl.text.trim()),
-      'valorFiltro': isAreas
-        ? (docRef?.id)
-        : (valorFiltroCtrl.text.trim().isEmpty
-          ? null
-          : valorFiltroCtrl.text.trim()),
       'cor': corCtrl.text.trim().isEmpty ? null : corCtrl.text.trim(),
     };
+
+    if (shouldAutoFilter) {
+      data['campoFiltro'] = autoCampoFiltro;
+      // valorFiltro será preenchido automaticamente com o ID do doc criado
+      data['valorFiltro'] = null;
+    }
 
     if (docRef == null) {
       data['ordem'] = await _nextOrderFor(_col);
       final created = await _col.add(data);
-      if (isAreas) {
+      if (shouldAutoFilter) {
         await created.update({'valorFiltro': created.id});
       }
     } else {
@@ -932,12 +1143,6 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
         backgroundColor: const Color(0xFF0F6E58),
         foregroundColor: Colors.white,
         actions: [
-          if (_isRootMenusContext)
-            IconButton(
-              tooltip: 'Migrar “Editais e notícias” (categoria)',
-              onPressed: () => _migrateEditaisNoticiasCategoria(context),
-              icon: const Icon(Icons.auto_fix_high),
-            ),
           if (_isGruposDePesquisaContext)
             IconButton(
               tooltip: 'Criar grupo (modelo tipo PPG)',
@@ -946,6 +1151,7 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
             ),
         ],
       ),
+      bottomNavigationBar: CustomNavBar(selected: NavDestination.manage),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF0F6E58),
         onPressed: () => _createOrEdit(),
@@ -956,17 +1162,6 @@ class _AdminCollectionScreenState extends State<_AdminCollectionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text(
-                'Coleção: ${widget.collectionPathLabel}',
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const Divider(height: 1),
             Expanded(
               child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _col.snapshots(),

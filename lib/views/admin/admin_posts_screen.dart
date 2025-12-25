@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import 'package:divulgapampa/services/storage_media_service.dart';
+import 'package:divulgapampa/widgets/custom_navbar.dart';
 import 'package:divulgapampa/widgets/guards/superuser_gate.dart';
 
 class AdminPostsScreen extends StatefulWidget {
@@ -48,6 +50,7 @@ class _AdminPostsScreenState extends State<AdminPostsScreen> {
           backgroundColor: const Color(0xFF0F6E58),
           foregroundColor: Colors.white,
         ),
+        bottomNavigationBar: CustomNavBar(selected: NavDestination.manage),
         body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
               .collection('artigos')
@@ -141,7 +144,19 @@ class _AdminPostsScreenState extends State<AdminPostsScreen> {
                                           ],
                                         ),
                                       );
-                                      if (ok == true) await doc.reference.delete();
+                                      if (ok == true) {
+                                        final snap = await doc.reference.get();
+                                        final dataNow = snap.data() ?? <String, dynamic>{};
+                                        final imagemStoragePath =
+                                            (dataNow['imagemStoragePath'] ?? '').toString().trim();
+                                        final videoStoragePath =
+                                            (dataNow['videoStoragePath'] ?? '').toString().trim();
+
+                                        await doc.reference.delete();
+
+                                        await StorageMediaService.deleteIfExists(imagemStoragePath);
+                                        await StorageMediaService.deleteIfExists(videoStoragePath);
+                                      }
                                     }
                                   },
                                   itemBuilder: (_) => [
@@ -177,29 +192,9 @@ Future<void> _editDialog(
   final resumoCtrl = TextEditingController(text: (existing['resumo'] ?? '').toString());
   final conteudoCtrl = TextEditingController(text: (existing['conteudo'] ?? '').toString());
 
-  String listToCsv(dynamic v) {
-    final list = (v as List?)?.map((e) => e.toString()).toList() ?? const <String>[];
-    return list.join(',');
-  }
-
-  final ppgIdsCtrl = TextEditingController(text: listToCsv(existing['ppgIds']));
-  final areaIdsCtrl = TextEditingController(text: listToCsv(existing['areaIds']));
-  final assuntoIdsCtrl = TextEditingController(text: listToCsv(existing['assuntoIds']));
-  final grupoIdsCtrl = TextEditingController(text: listToCsv(existing['grupoPesquisaIds']));
-  final linhasIdsCtrl = TextEditingController(text: listToCsv(existing['linhasPesquisaIds']));
-
-  List<String>? csvToList(String text) {
-    final parts = text
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    return parts.isEmpty ? null : parts;
-  }
-
   final ok = await showDialog<bool>(
     context: context,
-    builder: (_) => AlertDialog(
+    builder: (ctx) => AlertDialog(
       title: const Text('Editar publicação'),
       content: SingleChildScrollView(
         child: Column(
@@ -209,20 +204,30 @@ Future<void> _editDialog(
             TextField(controller: autorCtrl, decoration: const InputDecoration(labelText: 'Autor')),
             TextField(controller: resumoCtrl, decoration: const InputDecoration(labelText: 'Resumo')),
             TextField(controller: conteudoCtrl, decoration: const InputDecoration(labelText: 'Conteúdo'), maxLines: 4),
-            const SizedBox(height: 8),
-            TextField(controller: ppgIdsCtrl, decoration: const InputDecoration(labelText: 'ppgIds (csv)')),
-            TextField(controller: areaIdsCtrl, decoration: const InputDecoration(labelText: 'areaIds (csv)')),
-            TextField(controller: assuntoIdsCtrl, decoration: const InputDecoration(labelText: 'assuntoIds (csv)')),
-            TextField(controller: grupoIdsCtrl, decoration: const InputDecoration(labelText: 'grupoPesquisaIds (csv)')),
-            TextField(controller: linhasIdsCtrl, decoration: const InputDecoration(labelText: 'linhasPesquisaIds (csv)')),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
         ElevatedButton(
           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
-          onPressed: () => Navigator.pop(context, true),
+          onPressed: () {
+            final titulo = tituloCtrl.text.trim();
+            final conteudo = conteudoCtrl.text.trim();
+            if (titulo.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Título é obrigatório.')),
+              );
+              return;
+            }
+            if (conteudo.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Conteúdo é obrigatório.')),
+              );
+              return;
+            }
+            Navigator.pop(ctx, true);
+          },
           child: const Text('Salvar', style: TextStyle(color: Colors.white)),
         ),
       ],
@@ -236,10 +241,5 @@ Future<void> _editDialog(
     'autor': autorCtrl.text.trim(),
     'resumo': resumoCtrl.text.trim(),
     'conteudo': conteudoCtrl.text.trim(),
-    'ppgIds': csvToList(ppgIdsCtrl.text),
-    'areaIds': csvToList(areaIdsCtrl.text),
-    'assuntoIds': csvToList(assuntoIdsCtrl.text),
-    'grupoPesquisaIds': csvToList(grupoIdsCtrl.text),
-    'linhasPesquisaIds': csvToList(linhasIdsCtrl.text),
   });
 }

@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:divulgapampa/services/storage_media_service.dart';
 import 'package:divulgapampa/widgets/custom_navbar.dart';
 import 'package:divulgapampa/widgets/guards/superuser_gate.dart';
 
@@ -14,6 +17,154 @@ class AdminUsersScreen extends StatefulWidget {
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
+
+  Future<String?> _deleteOrDisableAuthUser({
+    required String uid,
+    required String mode,
+  }) async {
+    try {
+      final callable = FirebaseFunctions.instance.httpsCallable('adminDeleteAuthUser');
+      final result = await callable.call(<String, dynamic>{
+        'uid': uid,
+        'mode': mode,
+      });
+      final modeResult = (result.data is Map)
+          ? ((result.data as Map)['mode'] ?? '').toString().trim().toLowerCase()
+          : '';
+
+      if (modeResult == 'disable') return 'Login desativado no Auth.';
+      if (modeResult == 'delete') return 'Usuário removido do Auth.';
+      return 'Auth atualizado.';
+    } on FirebaseFunctionsException catch (e) {
+      // Se já não existir no Auth, não bloqueia o restante do cleanup.
+      if (e.code == 'not-found') {
+        return 'Usuário não encontrado no Auth (ok).';
+      }
+      return 'Falha ao alterar Auth: ${e.message ?? e.code}';
+    } catch (e) {
+      return 'Falha ao alterar Auth: $e';
+    }
+  }
+
+  Future<void> _confirmAndDeleteUser(
+    BuildContext context,
+    DocumentReference<Map<String, dynamic>> userRef,
+    Map<String, dynamic> userData,
+  ) async {
+    final uid = userRef.id;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid != null && uid == currentUid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não é possível excluir o próprio usuário logado.')),
+      );
+      return;
+    }
+
+    final nome = (userData['nome'] ?? '').toString().trim();
+    final email = (userData['email'] ?? '').toString().trim();
+    final label = nome.isNotEmpty ? nome : (email.isNotEmpty ? email : uid);
+
+    final selectedMode = await showDialog<String?>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Excluir usuário'),
+        content: Text(
+          'Tem certeza que deseja excluir "$label"?\n\n'
+          'Isso vai remover:\n'
+          '• todas as publicações (artigos) desse autor\n'
+          '• imagens/vídeos dessas publicações no Storage\n\n'
+          'Além disso, você pode:\n'
+          '• desativar o login (reversível)\n'
+          '• ou excluir (permanente)\n',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F6E58)),
+            onPressed: () => Navigator.pop(context, 'disable'),
+            child: const Text('Desativar login', style: TextStyle(color: Colors.white)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, 'delete'),
+            child: const Text('Excluir', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedMode == null) return;
+
+    int deletedArticles = 0;
+    int deletedStorage = 0;
+    String? authMessage;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        title: Text('Excluindo…'),
+        content: SizedBox(
+          height: 90,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+    );
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      while (true) {
+        final snap = await firestore
+            .collection('artigos')
+            .where('autorUid', isEqualTo: uid)
+            .limit(200)
+            .get();
+        if (snap.docs.isEmpty) break;
+
+        for (final doc in snap.docs) {
+          final data = doc.data();
+          final imagemStoragePath = (data['imagemStoragePath'] ?? '').toString().trim();
+          final videoStoragePath = (data['videoStoragePath'] ?? '').toString().trim();
+
+          if (imagemStoragePath.isNotEmpty) {
+            await StorageMediaService.deleteIfExists(imagemStoragePath);
+            deletedStorage++;
+          }
+          if (videoStoragePath.isNotEmpty) {
+            await StorageMediaService.deleteIfExists(videoStoragePath);
+            deletedStorage++;
+          }
+
+          await doc.reference.delete();
+          deletedArticles++;
+        }
+      }
+
+      await userRef.delete();
+
+      authMessage = await _deleteOrDisableAuthUser(uid: uid, mode: selectedMode);
+
+      if (context.mounted) {
+        Navigator.pop(context); // fecha dialog de progresso
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Usuário excluído. Artigos removidos: $deletedArticles. Mídias removidas: $deletedStorage.'
+              '${authMessage == null ? '' : ' $authMessage'}',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // fecha dialog de progresso
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao excluir usuário: $e')),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -116,6 +267,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                       await doc.reference.update({'ativo': !ativo});
                                     } else if (v == 'leaderScopes') {
                                       await _editLeaderScope(context, doc.reference, data);
+                                    } else if (v == 'delete') {
+                                      await _confirmAndDeleteUser(context, doc.reference, data);
                                     } else if (v.startsWith('role:')) {
                                       final newRole = v.split(':')[1];
                                       if (newRole == 'lider') {
@@ -141,6 +294,11 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                     const PopupMenuItem(value: 'role:superuser', child: Text('Definir como superuser')),
                                     const PopupMenuDivider(),
                                     const PopupMenuItem(value: 'leaderScopes', child: Text('Editar escopo do líder')),
+                                    const PopupMenuDivider(),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('Excluir usuário', style: TextStyle(color: Colors.red)),
+                                    ),
                                   ],
                                 ),
                               ),
